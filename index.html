@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Calibración - Versión Estática</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Librería XLSX desde CDN para funcionamiento sin servidor backend -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- Librería HTML5-QRCode para escaneo de códigos QR -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+
+<body>
+    <div class="background-globes">
+        <div class="globe globe-1"></div>
+        <div class="globe globe-2"></div>
+    </div>
+
+    <main class="container">
+        <header>
+            <h1>Analizador de Equipos (Estática)</h1>
+            <p>Procesamiento local en tu navegador. Sin servidor.</p>
+        </header>
+
+        <section class="upload-section glass-panel">
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" accept=".xlsx, .xls">
+                <label for="fileInput" class="file-label">
+                    <span class="icon">📂</span>
+                    <span class="text">Seleccionar Archivo Excel</span>
+                </label>
+            </div>
+            <button id="processBtn" class="primary-btn">Procesar Archivo</button>
+            <div id="loading" class="hidden">Procesando...</div>
+        </section>
+
+        <!-- Nueva sección de Verificación / Escaneo -->
+        <section class="verification-section glass-panel">
+            <h2>Verificación de Equipos</h2>
+            <div class="scan-controls">
+                <button id="startScanBtn" class="secondary-btn">📷 Escanear QR</button>
+                <button id="stopScanBtn" class="secondary-btn hidden">Desactivar Cámara</button>
+            </div>
+
+            <div id="reader" class="qr-reader hidden"></div>
+
+            <div class="input-group">
+                <label for="qrInput">Código Escaneado:</label>
+                <input type="text" id="qrInput" placeholder="Último valor..." readonly>
+            </div>
+
+            <div id="scanResult" class="scan-result hidden"></div>
+
+            <!-- Tabla de items escaneados en esta sesión -->
+            <div class="scanned-items-container">
+                <h3>Items Escaneados (Sesión Actual)</h3>
+                <div class="actions-bar">
+                    <button id="exportBtn" class="action-btn">📥 Exportar Excel</button>
+                    <button id="clearScansBtn" class="secondary-btn" style="font-size: 0.8rem; padding: 5px 10px;">Limpiar Lista</button>
+                </div>
+                
+                <div class="table-container">
+                    <table id="scannedTable">
+                        <thead>
+                            <tr>
+                                <th>Campo Equipo</th>
+                                <th>No. Serie (Col 2)</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Se llenará dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <div id="resultsArea" class="hidden">
+            <div class="stats-grid">
+                <section class="stat-card glass-panel" style="grid-column: span 2;">
+                    <h2>Resumen por Unidad y Rango</h2>
+                    <div class="table-container">
+                        <table id="tableResumen">
+                            <thead>
+                                <tr>
+                                    <th>Unidad</th>
+                                    <th>Rango</th>
+                                    <th>Cantidad de Equipos</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <section class="main-table-card glass-panel">
+                <h2>Detalle de Equipos</h2>
+                <p class="subtitle">Ordenado por Unidad, luego Rango, y Fecha de Calibración (Reciente primero)</p>
+                <div class="table-container large-table">
+                    <table id="tableMain">
+                        <thead>
+                            <!-- Se llenará dinámicamente -->
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
