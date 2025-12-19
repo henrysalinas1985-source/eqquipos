@@ -34,7 +34,8 @@
                 </label>
             </div>
             <button id="processBtn" class="primary-btn">Procesar Archivo</button>
-            <button id="exportBtn" class="action-btn" disabled style="background-color: #10b981; margin-left: 10px;">💾 Exportar Excel</button>
+            <button id="exportBtn" class="action-btn" disabled style="background-color: #10b981; margin-left: 10px;">💾
+                Exportar Excel</button>
             <div id="loading" class="hidden">Procesando...</div>
         </section>
 
@@ -54,42 +55,26 @@
             </div>
 
             <!-- Panel de Edición tras Hallazgo -->
-            <div id="editPanel" class="hidden" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+            <div id="editPanel" class="hidden"
+                style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
                 <h3 style="color: #4ade80; margin-top: 0;">✅ ¡Equipo Encontrado!</h3>
                 <p id="matchInfo" style="color: #cbd5e1; font-size: 0.9em; margin-bottom: 10px;"></p>
-                
+
                 <div class="input-group">
                     <label for="dateInput">Actualizar Fecha (Columna 5):</label>
                     <input type="date" id="dateInput">
                 </div>
-                <button id="updateBtn" class="primary-btn" style="width: 100%; margin-top: 10px;">Actualizar Fecha</button>
+                <button id="updateBtn" class="primary-btn" style="width: 100%; margin-top: 10px;">Actualizar
+                    Fecha</button>
             </div>
 
             <div id="scanResult" class="scan-result hidden"></div>
         </section>
 
         <div id="resultsArea" class="hidden">
-            <div class="stats-grid">
-                <section class="stat-card glass-panel" style="grid-column: span 2;">
-                    <h2>Resumen por Unidad y Rango</h2>
-                    <div class="table-container">
-                        <table id="tableResumen">
-                            <thead>
-                                <tr>
-                                    <th>Unidad</th>
-                                    <th>Rango</th>
-                                    <th>Cantidad de Equipos</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </section>
-            </div>
-
             <section class="main-table-card glass-panel">
                 <h2>Detalle de Equipos</h2>
-                <p class="subtitle">Ordenado por Unidad, luego Rango, y Fecha de Calibración (Reciente primero)</p>
+                <p class="subtitle">Columnas 1 y 5 son clave. Ordenado por Columna 1.</p>
                 <div class="table-container large-table">
                     <table id="tableMain">
                         <thead>

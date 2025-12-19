@@ -110,16 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- HELPERS ---
-    function findKey(row, keywords) {
-        if (!row) return null;
-        const keys = Object.keys(row);
-        const normalize = (s) => s.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-
-        return keys.find(k => {
-            const normKey = normalize(k);
-            return keywords.some(kw => normKey.includes(normalize(kw)));
-        });
-    }
 
     function formatDate(val) {
         if (val instanceof Date) return val.toLocaleDateString('es-ES'); // Ej: 19/12/2025
@@ -151,60 +141,29 @@ document.addEventListener('DOMContentLoaded', () => {
     function processData(rawData) {
         if (rawData.length === 0) return;
 
-        const firstRow = rawData[0];
-        const keyUnidad = findKey(firstRow, ['unidad', 'unit', 'ubicacion']) || 'UNIDAD';
-        const keyRango = findKey(firstRow, ['rango', 'range']) || 'RANGO';
-        const keyFecha = findKey(firstRow, ['fecha', 'date', 'calib']) || 'FECHA DE CALIBRACION';
+        // Detectar columnas estrictas por índice (0 y 4)
+        // Guardamos las keys reales para usarlas
+        const keys = Object.keys(rawData[0]);
+        const keyId = keys[0]; // Columna 1 -> ID
+        const keyCalib = (keys.length > 4) ? keys[4] : null; // Columna 5 -> Calibración
 
-        // Lógica de conteo para Resumen
-        const counts = {};
-        rawData.forEach(row => {
-            const unidad = row[keyUnidad] || 'Sin Unidad';
-            const rango = row[keyRango] || 'Sin Rango';
-            const compositeKey = `${unidad}|||${rango}`;
+        console.log("Columnas Estrictas detectadas:", { keyId, keyCalib });
 
-            if (!counts[compositeKey]) {
-                counts[compositeKey] = { unidad, rango, cantidad: 0 };
-            }
-            counts[compositeKey].cantidad++;
-        });
-
-        const summaryList = Object.values(counts).sort((a, b) => {
-            if (a.unidad < b.unidad) return -1;
-            if (a.unidad > b.unidad) return 1;
-            if (a.rango < b.rango) return -1;
-            if (a.rango > b.rango) return 1;
-            return 0;
-        });
-
+        // Ordenar datos principales (Detalle) solo por ID
         const sortedData = [...rawData].sort((a, b) => {
-            // Orden simple para visualización
-            const uA = (a[keyUnidad] || '').toString();
-            const uB = (b[keyUnidad] || '').toString();
-            if (uA < uB) return -1;
-            if (uA > uB) return 1;
+            const idA = (a[keyId] || '').toString();
+            const idB = (b[keyId] || '').toString();
+            if (idA < idB) return -1;
+            if (idA > idB) return 1;
             return 0;
         });
 
-        renderResults(summaryList, sortedData, keyFecha);
+        renderMainTable('tableMain', sortedData, keyCalib);
     }
 
-    function renderResults(summaryList, sortedData, keyFecha) {
-        if (summaryList) renderSummaryTable('tableResumen', summaryList);
-        if (sortedData) renderMainTable('tableMain', sortedData, keyFecha);
-    }
+    // Ya no se usa renderSummaryTable
 
-    function renderSummaryTable(tableId, list) {
-        const tbody = document.querySelector(`#${tableId} tbody`);
-        tbody.innerHTML = '';
-        list.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${item.unidad}</td><td>${item.rango}</td><td>${item.cantidad}</td>`;
-            tbody.appendChild(tr);
-        });
-    }
-
-    function renderMainTable(tableId, dataList, keyFecha) {
+    function renderMainTable(tableId, dataList, keyCalib) {
         const table = document.getElementById(tableId);
         const thead = table.querySelector('thead');
         const tbody = table.querySelector('tbody');
@@ -228,9 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
             headers.forEach(h => {
                 const td = document.createElement('td');
                 let val = row[h];
-                if (h === keyFecha || val instanceof Date) {
+
+                // Si es la columna de calibración (Col 5)
+                if (h === keyCalib) {
+                    val = formatDate(val);
+                } else if (val instanceof Date) {
                     val = formatDate(val);
                 }
+
                 td.textContent = (val !== undefined && val !== null) ? val : '';
                 tr.appendChild(td);
             });
