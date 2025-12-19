@@ -282,6 +282,139 @@ document.addEventListener('DOMContentLoaded', () => {
         scanResult.style.borderColor = isSuccess ? '#4ade80' : '#f87171';
     }
 
+    // --- OCR LOGIC ---
+    const ocrModal = document.getElementById('ocrModal');
+    const ocrVideo = document.getElementById('ocrVideo');
+    const ocrCanvas = document.getElementById('ocrCanvas');
+    const captureBtn = document.getElementById('captureBtn');
+    const cancelOcrBtn = document.getElementById('cancelOcrBtn');
+    const ocrProcessing = document.getElementById('ocrProcessing');
+    const ocrControls = document.getElementById('ocrControls');
+    const ocrBar = document.getElementById('ocrBar');
+
+    let ocrStream = null;
+    let pendingQrCode = ""; // Guardar el QR que no se encontró
+
+    function startOcrCamera() {
+        ocrModal.classList.remove('hidden');
+        ocrControls.classList.remove('hidden');
+        ocrProcessing.classList.add('hidden');
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => {
+                ocrStream = stream;
+                ocrVideo.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("Error cámara OCR:", err);
+                alert("No se pudo acceder a la cámara para OCR.");
+                closeOcrModal();
+            });
+    }
+
+    function closeOcrModal() {
+        if (ocrStream) {
+            ocrStream.getTracks().forEach(track => track.stop());
+            ocrStream = null;
+        }
+        ocrModal.classList.add('hidden');
+    }
+
+    cancelOcrBtn.addEventListener('click', closeOcrModal);
+
+    captureBtn.addEventListener('click', () => {
+        // Capturar frame
+        const w = ocrVideo.videoWidth;
+        const h = ocrVideo.videoHeight;
+        ocrCanvas.width = w;
+        ocrCanvas.height = h;
+        const ctx = ocrCanvas.getContext('2d');
+        ctx.drawImage(ocrVideo, 0, 0, w, h);
+
+        // Detener cámara temporalmente para procesar
+        if (ocrStream) {
+            ocrStream.getTracks().forEach(track => track.stop());
+        }
+
+        // Mostrar UI de proceso
+        ocrControls.classList.add('hidden');
+        ocrProcessing.classList.remove('hidden');
+        ocrBar.style.width = "0%";
+
+        // Iniciar Tesseract
+        Tesseract.recognize(
+            ocrCanvas.toDataURL('image/png'),
+            'eng', // Usar inglés para mejor reconocimiento de letras/números (vs spa)
+            {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        ocrBar.style.width = `${Math.floor(m.progress * 100)}%`;
+                    }
+                }
+            }
+        ).then(({ data: { text } }) => {
+            console.log("OCR Result:", text);
+
+            // Limpieza básica: Alfanuméricos y guiones
+            const cleanedSerial = text.replace(/[^A-Za-z0-9-]/g, '').trim();
+
+            if (!cleanedSerial) {
+                alert("No se detectó texto legible. Inténtalo de nuevo.");
+                closeOcrModal();
+                return;
+            }
+
+            // Confirmar resultado
+            const confirmedSerial = prompt(`Texto detectado: ${cleanedSerial} \n\n¿Es correcto el Número de Serie? (Edítalo si es necesario)`, cleanedSerial);
+
+            if (confirmedSerial) {
+                createNewRow(pendingQrCode, confirmedSerial);
+            }
+            closeOcrModal();
+        }).catch(err => {
+            console.error(err);
+            alert("Error al procesar la imagen: " + err.message);
+            closeOcrModal();
+        });
+    });
+
+    function createNewRow(qrCode, serialNumber) {
+        if (!globalHeaders || globalHeaders.length < 5) {
+            alert("Error: El Excel no tiene estructura suficiente para agregar filas.");
+            return;
+        }
+
+        const newRow = {};
+        // Llenar con strings vacíos por defecto
+        globalHeaders.forEach(h => newRow[h] = "");
+
+        // Asignar valores específicos
+        // Columna 1 (Index 0): Equipo (QR)
+        newRow[globalHeaders[0]] = qrCode;
+
+        // Columna 3 (Index 2): Serie
+        if (globalHeaders.length > 2) {
+            newRow[globalHeaders[2]] = serialNumber;
+        }
+
+        // Columna 5 (Index 4): Fecha Actual (por defecto)
+        if (globalHeaders.length > 4) {
+            newRow[globalHeaders[4]] = new Date();
+        }
+
+        // Agregar a datos globales
+        globalDataRaw.push(newRow);
+
+        // Refrescar tabla
+        processData(globalDataRaw);
+
+        // Feedback
+        alert(`✅ ¡Nuevo equipo agregado!\n\nID: ${qrCode}\nSerie: ${serialNumber}`);
+        qrInput.value = "";
+        editPanel.classList.add('hidden');
+        scanResult.classList.add('hidden');
+    }
+
     function findAndSetupEdit(scannedId) {
         // Asumiendo Columna 1 = index 0
         const idKey = globalHeaders[0];
@@ -303,16 +436,14 @@ document.addEventListener('DOMContentLoaded', () => {
             matchInfo.innerHTML = `<strong>ID:</strong> ${rowData[idKey]}<br><strong>Fila Excel:</strong> ${index + 2}`;
 
             // Asumiendo Columna 5 = index 4 para la Fecha
-            // Verificar si existe esa columna
             if (globalHeaders.length >= 5) {
                 const dateKey = globalHeaders[4];
                 const currentDateVal = rowData[dateKey];
 
-                // Poner valor actual en input date
                 dateInput.value = formatDateForInput(currentDateVal);
-
-                // Guardar key para uso en update
                 dateInput.dataset.targetKey = dateKey;
+                dateInput.disabled = false;
+                updateBtn.disabled = false;
             } else {
                 alert("El Excel tiene menos de 5 columnas. No se puede actualizar la columna 5.");
                 dateInput.disabled = true;
@@ -320,9 +451,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
         } else {
+            // NO ENCONTRADO
             currentMatchIndex = -1;
             editPanel.classList.add('hidden');
-            showScanFeedback(`❌ ID "${scannedId}" no encontrado en Columna "${idKey}".`, false);
+
+            // Feedback con opción de OCR
+            pendingQrCode = scannedId;
+            scanResult.classList.remove('hidden');
+            scanResult.style.color = '#f87171';
+            scanResult.style.borderColor = '#f87171';
+            scanResult.innerHTML = `
+                ❌ ID no encontrado.<br>
+                <button id="startOcrBtn" class="secondary-btn" style="margin-top:10px; font-size: 0.9em; background: #3b82f6; border-color: #3b82f6; color: white;">
+                    📷 Capturar Serie (OCR)
+                </button>
+            `;
+
+            // Bind click del botón dinámico
+            document.getElementById('startOcrBtn').addEventListener('click', startOcrCamera);
         }
     }
 
@@ -339,24 +485,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetKey = dateInput.dataset.targetKey;
         if (!targetKey) return;
 
-        // Actualizar datos globales
-        // XLSX sheet_to_json usa fechas nativas si cellDates: true, 
-        // pero para homogeneizar podemos guardar string o date. 
-        // Al escribir de nuevo, si es Date object es mejor.
-
-        // Crear fecha local (el input date da yyyy-mm-dd UTC a veces, mejor parsing simple)
         const [y, m, d] = newDateVal.split('-').map(Number);
         const dateObj = new Date(y, m - 1, d); // Mes 0-index
 
         globalDataRaw[currentMatchIndex][targetKey] = dateObj;
 
-        // Feedback UI
         alert(`¡Fecha actualizada para fila ${currentMatchIndex + 2}!`);
         editPanel.classList.add('hidden');
         qrInput.value = "";
 
-        // Refrescar tabla visualmente (importante para que el usuario crea que pasó algo)
-        // Re-ejecutar processData es pesado pero seguro
         processData(globalDataRaw);
     });
 
