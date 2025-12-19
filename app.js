@@ -295,8 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lastSegment = parts[parts.length - 1]; // Tomar el último pedazo (nombre archivo/ID)
 
                 // Remover los signos '%', dejando los códigos hex (ej: 2D) y el texto
-                // CEN%2D123 -> CEN2D123
-                finalValue = lastSegment.replace(/%/g, '');
+                // CEN%2D123 -> CEN-2D123 (Solicitado: conservar el delimitador pero como guión)
+                finalValue = lastSegment.replace(/%/g, '-');
 
             } else if (decodedText.includes('%')) {
                 // Estrategia 2: (DESACTIVADA) Fallback genérico para otros formatos que usan %
