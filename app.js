@@ -5,7 +5,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadingDiv = document.getElementById('loading');
     const resultsArea = document.getElementById('resultsArea');
 
-    // Feedback visual al seleccionar archivo
+    // Variables Globales para Estado
+    let globalDataRaw = [];
+    let globalHeaders = [];
+    let globalWorkbook = null;
+    let globalFirstSheetName = "";
+
+    // Elementos UI adicionales
+    const exportBtn = document.getElementById('exportBtn');
+
+    // Elementos de la sección Verificación / Edición
+    const editPanel = document.getElementById('editPanel');
+    const matchInfo = document.getElementById('matchInfo');
+    const dateInput = document.getElementById('dateInput');
+    const updateBtn = document.getElementById('updateBtn');
+
+    // Estado de la selección actual
+    let currentMatchIndex = -1; // Índice en globalDataRaw
+
+    // --- MANEJO DE ARCHIVOS ---
+
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
             fileLabelText.textContent = `Archivo seleccionado: ${e.target.files[0].name}`;
@@ -24,24 +43,35 @@ document.addEventListener('DOMContentLoaded', () => {
         processBtn.disabled = true;
         processBtn.textContent = 'Procesando...';
         resultsArea.classList.add('hidden');
+        exportBtn.disabled = true;
 
-        // Usar FileReader para leer el archivo localmente
         const reader = new FileReader();
 
         reader.onload = (e) => {
             try {
                 const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                globalWorkbook = XLSX.read(data, { type: 'array', cellDates: true });
 
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
+                globalFirstSheetName = globalWorkbook.SheetNames[0];
+                const worksheet = globalWorkbook.Sheets[globalFirstSheetName];
 
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" }); // defval to avoid undefined
+                // Leer JSON con defval ""
+                globalDataRaw = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
-                processData(jsonData);
+                if (globalDataRaw.length > 0) {
+                    globalHeaders = Object.keys(globalDataRaw[0]);
+                    console.log("Headers Globales:", globalHeaders);
+                }
+
+                processData(globalDataRaw);
 
                 loadingDiv.classList.add('hidden');
                 resultsArea.classList.remove('hidden');
+
+                // Habilitar Exportar si hay datos
+                if (globalDataRaw.length > 0) {
+                    exportBtn.disabled = false;
+                }
 
             } catch (error) {
                 console.error(error);
@@ -55,13 +85,34 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsArrayBuffer(file);
     });
 
-    /**
-     * Busca una key en el objeto row de forma "fuzzy" (ignorando mayúsculas, tildes, espacios)
-     */
+    // --- ACCIÓN: EXPORTAR EXCEL ---
+    exportBtn.addEventListener('click', () => {
+        if (!globalDataRaw || globalDataRaw.length === 0) {
+            alert("No hay datos para exportar.");
+            return;
+        }
+
+        try {
+            // Convertir datos actuales (que pueden haber sido modificados) a hoja
+            const newSheet = XLSX.utils.json_to_sheet(globalDataRaw);
+
+            // Crear nuevo libro
+            const newWb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(newWb, newSheet, globalFirstSheetName || "Sheet1");
+
+            // Descargar
+            XLSX.writeFile(newWb, "Equipos_Actualizados.xlsx");
+        } catch (err) {
+            console.error(err);
+            alert("Error al exportar el archivo.");
+        }
+    });
+
+
+    // --- HELPERS ---
     function findKey(row, keywords) {
         if (!row) return null;
         const keys = Object.keys(row);
-        // Normalizar string: quitar tildes, mayúsculas, espacios trim
         const normalize = (s) => s.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
         return keys.find(k => {
@@ -71,10 +122,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatDate(val) {
-        if (val instanceof Date) return val.toLocaleDateString('es-ES');
+        if (val instanceof Date) return val.toLocaleDateString('es-ES'); // Ej: 19/12/2025
 
         if (typeof val === 'string') {
-            // Un formato largo como "Wed Oct 01 2025..."
             const d = new Date(val);
             if (!isNaN(d.getTime())) {
                 return d.toLocaleDateString('es-ES');
@@ -83,42 +133,43 @@ document.addEventListener('DOMContentLoaded', () => {
         return val;
     }
 
+    // Ajuste para formatear fechas para input type="date" (YYYY-MM-DD)
+    function formatDateForInput(val) {
+        if (!val) return "";
+        let d = val;
+        if (!(d instanceof Date)) {
+            d = new Date(val);
+        }
+        if (isNaN(d.getTime())) return "";
+
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
+
     function processData(rawData) {
         if (rawData.length === 0) return;
 
-        // Detectar columnas reales
         const firstRow = rawData[0];
         const keyUnidad = findKey(firstRow, ['unidad', 'unit', 'ubicacion']) || 'UNIDAD';
         const keyRango = findKey(firstRow, ['rango', 'range']) || 'RANGO';
         const keyFecha = findKey(firstRow, ['fecha', 'date', 'calib']) || 'FECHA DE CALIBRACION';
 
-        console.log("Columnas detectadas:", { keyUnidad, keyRango, keyFecha });
-
-        // 1. Agrupación por UNIDAD y RANGO (SOLO)
-        // Clave compuesta: Unidad|Rango
+        // Lógica de conteo para Resumen
         const counts = {};
-
         rawData.forEach(row => {
             const unidad = row[keyUnidad] || 'Sin Unidad';
             const rango = row[keyRango] || 'Sin Rango';
-
             const compositeKey = `${unidad}|||${rango}`;
 
             if (!counts[compositeKey]) {
-                counts[compositeKey] = {
-                    unidad: unidad,
-                    rango: rango,
-                    cantidad: 0
-                };
+                counts[compositeKey] = { unidad, rango, cantidad: 0 };
             }
             counts[compositeKey].cantidad++;
         });
 
-        // Convertir a lista
-        const summaryList = Object.values(counts);
-
-        // Ordenar resumen: Unidad -> Rango
-        summaryList.sort((a, b) => {
+        const summaryList = Object.values(counts).sort((a, b) => {
             if (a.unidad < b.unidad) return -1;
             if (a.unidad > b.unidad) return 1;
             if (a.rango < b.rango) return -1;
@@ -126,44 +177,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return 0;
         });
 
-
-        // 2. Ordenar datos principales (Detalle)
         const sortedData = [...rawData].sort((a, b) => {
+            // Orden simple para visualización
             const uA = (a[keyUnidad] || '').toString();
             const uB = (b[keyUnidad] || '').toString();
             if (uA < uB) return -1;
             if (uA > uB) return 1;
-
-            const rA = (a[keyRango] || '').toString();
-            const rB = (b[keyRango] || '').toString();
-            if (rA < rB) return -1;
-            if (rA > rB) return 1;
-
-            const fA = a[keyFecha] instanceof Date ? a[keyFecha] : new Date(0);
-            const fB = b[keyFecha] instanceof Date ? b[keyFecha] : new Date(0);
-            return fB - fA;
+            return 0;
         });
 
-        // Pasar keyFecha para formatear esa columna específicamente
         renderResults(summaryList, sortedData, keyFecha);
     }
 
     function renderResults(summaryList, sortedData, keyFecha) {
-        renderSummaryTable('tableResumen', summaryList);
-        renderMainTable('tableMain', sortedData, keyFecha);
+        if (summaryList) renderSummaryTable('tableResumen', summaryList);
+        if (sortedData) renderMainTable('tableMain', sortedData, keyFecha);
     }
 
     function renderSummaryTable(tableId, list) {
         const tbody = document.querySelector(`#${tableId} tbody`);
         tbody.innerHTML = '';
-
         list.forEach(item => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${item.unidad}</td>
-                <td>${item.rango}</td>
-                <td>${item.cantidad}</td>
-            `;
+            tr.innerHTML = `<td>${item.unidad}</td><td>${item.rango}</td><td>${item.cantidad}</td>`;
             tbody.appendChild(tr);
         });
     }
@@ -192,14 +228,9 @@ document.addEventListener('DOMContentLoaded', () => {
             headers.forEach(h => {
                 const td = document.createElement('td');
                 let val = row[h];
-
-                // Si es la columna de fecha detectada, o parece fecha
-                if (h === keyFecha) {
-                    val = formatDate(val);
-                } else if (val instanceof Date) {
+                if (h === keyFecha || val instanceof Date) {
                     val = formatDate(val);
                 }
-
                 td.textContent = (val !== undefined && val !== null) ? val : '';
                 tr.appendChild(td);
             });
@@ -207,12 +238,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Lógica para Escaneo de QR y Verificación ---
+    // --- QR LOGIC ---
+
     const startScanBtn = document.getElementById('startScanBtn');
     const stopScanBtn = document.getElementById('stopScanBtn');
     const qrInput = document.getElementById('qrInput');
-    const compareInput = document.getElementById('compareInput');
-    const compareBtn = document.getElementById('compareBtn');
     const scanResult = document.getElementById('scanResult');
     const readerDiv = document.getElementById('reader');
 
@@ -223,44 +253,17 @@ document.addEventListener('DOMContentLoaded', () => {
         startScanBtn.classList.add('hidden');
         stopScanBtn.classList.remove('hidden');
 
-        // Configuración más robusta para QRs densos
+        // Reset UI de edición
+        editPanel.classList.add('hidden');
+        scanResult.classList.add('hidden');
+
         html5QrcodeScanner = new Html5Qrcode("reader");
+        const config = { fps: 30, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
 
-        const qrBoxSize = Math.min(window.innerWidth, window.innerHeight) * 0.7;
-
-        const config = {
-            fps: 30, // Mayor FPS para escanear más rápido
-            qrbox: { width: qrBoxSize, height: qrBoxSize },
-            aspectRatio: 1.0,
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true // Usa detector nativo del celular (más rápido)
-            }
-        };
-
-        // Configuración de cámara simplificada para evitar errores de la librería
-        // La librería exige solo una llave (facingMode o deviceId) en este objeto.
-        const cameraConfig = {
-            facingMode: "environment"
-        };
-
-        // Manejo de errores más detallado
-        html5QrcodeScanner.start(cameraConfig, config, onScanSuccess)
+        html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
             .catch(err => {
-                console.error("Error iniciando cámara", err);
-                let msg = "No se pudo iniciar la cámara.";
-
-                if (err.name === 'NotAllowedError' || err.toString().includes('Permission')) {
-                    msg = "Permiso denegado. Debes 'Permitir' el acceso a la cámara en el navegador.";
-                } else if (err.toString().includes('HTTPS')) {
-                    msg = "El navegador bloqueó la cámara por seguridad. Asegúrate de usar HTTPS o localhost.";
-                } else if (err.toString().includes('found 2 keys')) {
-                    // Fallback a config simple si la avanzada falla en este dispositivo
-                    console.warn("Falló config avanzada, intentando básica...");
-                    html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess);
-                    return;
-                }
-
-                alert(msg + "\nDetalle: " + err);
+                console.error("Camera Error", err);
+                alert("Error iniciando la cámara: " + err);
                 stopScanning();
             });
     });
@@ -274,107 +277,123 @@ document.addEventListener('DOMContentLoaded', () => {
                 startScanBtn.classList.remove('hidden');
                 stopScanBtn.classList.add('hidden');
                 html5QrcodeScanner.clear();
-            }).catch(err => {
-                console.error("Error deteniendo cámara", err);
-            });
+            }).catch(console.error);
         }
     }
 
     function onScanSuccess(decodedText, decodedResult) {
-        console.log(`Código escaneado: ${decodedText}`);
+        console.log(`Scan: ${decodedText}`);
 
+        // --- 1. PROCESAR FORMATO QR ---
         let finalValue = decodedText;
-
-        // Lógica de extracción inteligente
         try {
-            // Estrategia 1: Detectar URLs de Sharepoint/Encoded con separadores de ruta (%2F)
-            // Ejemplo: ...%2FCEN%2D200508020 -> CEN2D200508020
+            // Estrategia 1: Sharepoint encoded (CEN%2D...)
             if (decodedText.includes('%2F') || decodedText.includes('%2f')) {
-                // Dividir por la barra codificada
                 const parts = decodedText.split(/%2F|%2f/);
-                const lastSegment = parts[parts.length - 1]; // Tomar el último pedazo (nombre archivo/ID)
-
-                // Remover los signos '%', dejando los códigos hex (ej: 2D) y el texto
-                // CEN%2D123 -> CEN-2D123 (Solicitado: conservar el delimitador pero como guión)
+                const lastSegment = parts[parts.length - 1];
+                // CEN%2D123 -> CEN-2D123
                 finalValue = lastSegment.replace(/%/g, '-');
 
             } else if (decodedText.includes('%')) {
-                // Estrategia 2: (DESACTIVADA) Fallback genérico para otros formatos que usan %
-                // Se desactiva porque estaba corrompiendo textos normales con % (Ej: "ITEM 100%")
-                /*
-                const parts = decodedText.split('%');
-                if (parts.length > 1) {
-                    const prefixPart = parts[0];
-                    // Tomar hasta 3 letras antes del %
-                    let threeChars = prefixPart;
-                    if (prefixPart.length >= 3) {
-                        threeChars = prefixPart.substring(prefixPart.length - 3);
-                    }
-
-                    // Buscar números al final
-                    const matches = decodedText.match(/(\d+)$/);
-                    let endNumbers = "";
-                    if (matches && matches[1]) {
-                        endNumbers = matches[1];
-                    }
-
-                    if (threeChars || endNumbers) {
-                        finalValue = `${threeChars.toUpperCase()}${endNumbers}`;
-                    }
-                }
-                */
-                // Mantener valor original si no cae en Estrategia 1
-                finalValue = decodedText;
+                // Estrategia 2: Desactivada anteriormente, solo replace simple si se desea
+                finalValue = decodedText; // Dejar tal cual o aplicar lógica si es necesario
             }
-        } catch (e) {
-            console.error("Error parseando código", e);
-        }
+        } catch (e) { console.error(e); }
 
         qrInput.value = finalValue;
         stopScanning();
 
-        // Feedback visual
-        scanResult.classList.remove('hidden');
-        scanResult.innerHTML = `
-            <div style="text-align:center;">
-                <strong>¡Dato Procesado!</strong><br>
-                <span style="font-size:1.2em; color:#4ade80; font-weight:bold;">${finalValue}</span><br>
-                <div style="font-size:0.8em; color:#94a3b8; margin-top:5px; word-break:break-all;">Original: ${decodedText.substring(0, 50)}...</div>
-            </div>
-        `;
-
-        // Auto-ocultar después de 5s
-        setTimeout(() => {
-            scanResult.classList.add('hidden');
-        }, 5000);
+        // --- 2. BUSCAR EN EXCEL (Columna 1) ---
+        if (globalDataRaw.length > 0 && globalHeaders.length > 0) {
+            findAndSetupEdit(finalValue);
+        } else {
+            showScanFeedback(`Escaneado: ${finalValue} (⚠️ Carga un Excel para buscar)`, false);
+        }
     }
 
-    compareBtn.addEventListener('click', () => {
-        const val1 = qrInput.value.trim();
-        const val2 = compareInput.value.trim();
+    function showScanFeedback(msg, isSuccess) {
+        scanResult.classList.remove('hidden');
+        scanResult.innerHTML = msg;
+        scanResult.style.color = isSuccess ? '#4ade80' : '#f87171'; // Green : Red
+        scanResult.style.borderColor = isSuccess ? '#4ade80' : '#f87171';
+    }
 
-        if (!val1) {
-            alert("Por favor escanea o escribe un código primero.");
+    function findAndSetupEdit(scannedId) {
+        // Asumiendo Columna 1 = index 0
+        const idKey = globalHeaders[0];
+
+        // Búsqueda (Case Insensitive trim)
+        const normalize = (s) => (s || '').toString().trim().toUpperCase();
+        const target = normalize(scannedId);
+
+        const index = globalDataRaw.findIndex(row => normalize(row[idKey]) === target);
+
+        if (index !== -1) {
+            currentMatchIndex = index;
+            const rowData = globalDataRaw[index];
+
+            showScanFeedback(`✅ ¡Encontrado en fila ${index + 2}!`, true);
+
+            // Setup Edit Panel
+            editPanel.classList.remove('hidden');
+            matchInfo.innerHTML = `<strong>ID:</strong> ${rowData[idKey]}<br><strong>Fila Excel:</strong> ${index + 2}`;
+
+            // Asumiendo Columna 5 = index 4 para la Fecha
+            // Verificar si existe esa columna
+            if (globalHeaders.length >= 5) {
+                const dateKey = globalHeaders[4];
+                const currentDateVal = rowData[dateKey];
+
+                // Poner valor actual en input date
+                dateInput.value = formatDateForInput(currentDateVal);
+
+                // Guardar key para uso en update
+                dateInput.dataset.targetKey = dateKey;
+            } else {
+                alert("El Excel tiene menos de 5 columnas. No se puede actualizar la columna 5.");
+                dateInput.disabled = true;
+                updateBtn.disabled = true;
+            }
+
+        } else {
+            currentMatchIndex = -1;
+            editPanel.classList.add('hidden');
+            showScanFeedback(`❌ ID "${scannedId}" no encontrado en Columna "${idKey}".`, false);
+        }
+    }
+
+    // --- ACCIÓN: ACTUALIZAR FECHA ---
+    updateBtn.addEventListener('click', () => {
+        if (currentMatchIndex === -1) return;
+
+        const newDateVal = dateInput.value; // YYYY-MM-DD string
+        if (!newDateVal) {
+            alert("Selecciona una fecha válida.");
             return;
         }
 
-        // TODO: Aquí implementaremos la lógica real de comparación con el Excel
-        // Por ahora, solo comparamos los dos inputs si existen
-        if (val2) {
-            if (val1.toLowerCase() === val2.toLowerCase()) {
-                scanResult.textContent = "✅ ¡Coincidencia Exacta!";
-                scanResult.style.color = "#4ade80"; // green
-                scanResult.style.borderColor = "#4ade80";
-            } else {
-                scanResult.textContent = "❌ No coinciden.";
-                scanResult.style.color = "#f87171"; // red
-                scanResult.style.borderColor = "#f87171";
-            }
-        } else {
-            scanResult.textContent = `Dato validado: ${val1} (Sin comparación externa)`;
-            scanResult.style.color = "#d1fae5";
-        }
-        scanResult.classList.remove('hidden');
+        const targetKey = dateInput.dataset.targetKey;
+        if (!targetKey) return;
+
+        // Actualizar datos globales
+        // XLSX sheet_to_json usa fechas nativas si cellDates: true, 
+        // pero para homogeneizar podemos guardar string o date. 
+        // Al escribir de nuevo, si es Date object es mejor.
+
+        // Crear fecha local (el input date da yyyy-mm-dd UTC a veces, mejor parsing simple)
+        const [y, m, d] = newDateVal.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d); // Mes 0-index
+
+        globalDataRaw[currentMatchIndex][targetKey] = dateObj;
+
+        // Feedback UI
+        alert(`¡Fecha actualizada para fila ${currentMatchIndex + 2}!`);
+        editPanel.classList.add('hidden');
+        qrInput.value = "";
+
+        // Refrescar tabla visualmente (importante para que el usuario crea que pasó algo)
+        // Re-ejecutar processData es pesado pero seguro
+        processData(globalDataRaw);
     });
 
 });
