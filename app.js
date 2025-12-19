@@ -324,8 +324,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const ocrControls = document.getElementById('ocrControls');
     const ocrBar = document.getElementById('ocrBar');
 
+    const startDirectOcrBtn = document.getElementById('startDirectOcrBtn');
+
     let ocrStream = null;
     let pendingQrCode = ""; // Guardar el QR que no se encontró
+
+    startDirectOcrBtn.addEventListener('click', () => {
+        pendingQrCode = ""; // Limpiar porque es un registro directo
+        startOcrCamera();
+    });
 
     function startOcrCamera() {
         ocrModal.classList.remove('hidden');
@@ -354,8 +361,92 @@ document.addEventListener('DOMContentLoaded', () => {
 
     cancelOcrBtn.addEventListener('click', closeOcrModal);
 
+    // --- REGISTRATION MODAL ELEMENTS ---
+    const registerModal = document.getElementById('registerModal');
+    const regIdInput = document.getElementById('regIdInput');
+    const regSerieInput = document.getElementById('regSerieInput');
+    const regLocationSelect = document.getElementById('regLocationSelect');
+    const confirmRegBtn = document.getElementById('confirmRegBtn');
+    const cancelRegBtn = document.getElementById('cancelRegBtn');
+
+    let globalLocations = []; // Cache list of unique locations
+
+    // Populate Location Dropdown
+    function populateLocations() {
+        if (!globalDataRaw || !globalHeaders || globalHeaders.length < 4) return;
+
+        const locKey = globalHeaders[3]; // Columna 4 (index 3)
+        // Extract unique, non-empty locations
+        const locSet = new Set();
+        globalDataRaw.forEach(row => {
+            const val = row[locKey];
+            if (val && typeof val === 'string' && val.trim() !== '') {
+                locSet.add(val.trim());
+            }
+        });
+
+        globalLocations = Array.from(locSet).sort();
+
+        // Render options
+        regLocationSelect.innerHTML = '<option value="">-- Seleccionar --</option>';
+        globalLocations.forEach(loc => {
+            const opt = document.createElement('option');
+            opt.value = loc;
+            opt.textContent = loc;
+            regLocationSelect.appendChild(opt);
+        });
+    }
+
+    // Call this after processing data
+    function refreshLocations() {
+        populateLocations();
+    }
+
+    // Modal Control
+    cancelRegBtn.addEventListener('click', () => {
+        registerModal.classList.add('hidden');
+    });
+
+    confirmRegBtn.addEventListener('click', () => {
+        const idVal = regIdInput.value.trim();
+        const serieVal = regSerieInput.value.trim();
+        const locVal = regLocationSelect.value;
+
+        if (!idVal) { alert("Debes ingresar un ID (Col. 1)."); return; }
+        if (!serieVal) { alert("Debes tener un N° Serie (OCR)."); return; }
+        // Ubicacion es opcional? Asumimos que si el usuario no elige, se va vacio.
+
+        saveNewEquipment(idVal, serieVal, locVal);
+        registerModal.classList.add('hidden');
+    });
+
+    function saveNewEquipment(id, serie, location) {
+        if (!globalHeaders || globalHeaders.length < 5) {
+            alert("Error: Estructura de Excel insuficiente.");
+            return;
+        }
+
+        const newRow = {};
+        globalHeaders.forEach(h => newRow[h] = ""); // Init defaults
+
+        newRow[globalHeaders[0]] = id;      // Col 1: ID
+        if (globalHeaders.length > 2) newRow[globalHeaders[2]] = serie;    // Col 3: Serie
+        if (globalHeaders.length > 3) newRow[globalHeaders[3]] = location; // Col 4: Ubicacion
+        if (globalHeaders.length > 4) newRow[globalHeaders[4]] = new Date(); // Col 5: Fecha
+
+        globalDataRaw.push(newRow);
+
+        processData(globalDataRaw);
+        refreshLocations(); // Update list in case we want to reuse logic later for adding new locations (not implemented yet but good practice)
+
+        alert(`✅ Equipo guardado!\nID: ${id}\nSerie: ${serie}\nUbicación: ${location || 'N/A'}`);
+        qrInput.value = "";
+        editPanel.classList.add('hidden');
+        scanResult.classList.add('hidden');
+    }
+
+    // --- UPDATED OCR CALLBACK ---
     captureBtn.addEventListener('click', () => {
-        // Capturar frame
         const w = ocrVideo.videoWidth;
         const h = ocrVideo.videoHeight;
         ocrCanvas.width = w;
@@ -363,89 +454,63 @@ document.addEventListener('DOMContentLoaded', () => {
         const ctx = ocrCanvas.getContext('2d');
         ctx.drawImage(ocrVideo, 0, 0, w, h);
 
-        // Detener cámara temporalmente para procesar
-        if (ocrStream) {
-            ocrStream.getTracks().forEach(track => track.stop());
-        }
+        if (ocrStream) ocrStream.getTracks().forEach(track => track.stop());
 
-        // Mostrar UI de proceso
         ocrControls.classList.add('hidden');
         ocrProcessing.classList.remove('hidden');
         ocrBar.style.width = "0%";
 
-        // Iniciar Tesseract
         Tesseract.recognize(
             ocrCanvas.toDataURL('image/png'),
-            'eng', // Usar inglés para mejor reconocimiento de letras/números (vs spa)
-            {
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        ocrBar.style.width = `${Math.floor(m.progress * 100)}%`;
-                    }
-                }
-            }
+            'eng',
+            { logger: m => { if (m.status === 'recognizing text') ocrBar.style.width = `${Math.floor(m.progress * 100)}%`; } }
         ).then(({ data: { text } }) => {
-            console.log("OCR Result:", text);
-
-            // Limpieza básica: Alfanuméricos y guiones
             const cleanedSerial = text.replace(/[^A-Za-z0-9-]/g, '').trim();
 
             if (!cleanedSerial) {
-                alert("No se detectó texto legible. Inténtalo de nuevo.");
+                alert("No se detectó texto. Intenta de nuevo.");
                 closeOcrModal();
                 return;
             }
 
-            // Confirmar resultado
-            const confirmedSerial = prompt(`Texto detectado: ${cleanedSerial} \n\n¿Es correcto el Número de Serie? (Edítalo si es necesario)`, cleanedSerial);
+            // --- PASO 1: CHEQUEO DE DUPLICADOS EN COLUMNA 3 (Index 2) ---
+            if (globalHeaders.length > 2) {
+                const serieKey = globalHeaders[2];
+                const normalize = s => (s || '').toString().trim().toUpperCase();
+                const targetSerial = normalize(cleanedSerial);
 
-            if (confirmedSerial) {
-                createNewRow(pendingQrCode, confirmedSerial);
+                const duplicateIndex = globalDataRaw.findIndex(row => normalize(row[serieKey]) === targetSerial);
+
+                if (duplicateIndex !== -1) {
+                    alert(`⚠️ ¡ATENCIÓN!\n\nEl N° de Serie "${cleanedSerial}" YA EXISTE en la fila ${duplicateIndex + 2}.\nNo se puede registrar de nuevo.`);
+                    closeOcrModal();
+                    return;
+                }
             }
+
+            // --- PASO 2: ABRIR MODAL DE REGISTRO ---
             closeOcrModal();
+            registerModal.classList.remove('hidden');
+
+            // Pre-fill fields
+            regIdInput.value = pendingQrCode || ""; // Si venimos de "QR no encontrado", usar ese ID.
+            regSerieInput.value = cleanedSerial;
+            populateLocations(); // Asegurar lista fresca
+
         }).catch(err => {
             console.error(err);
-            alert("Error al procesar la imagen: " + err.message);
+            alert("Error OCR: " + err.message);
             closeOcrModal();
         });
     });
 
-    function createNewRow(qrCode, serialNumber) {
-        if (!globalHeaders || globalHeaders.length < 5) {
-            alert("Error: El Excel no tiene estructura suficiente para agregar filas.");
-            return;
-        }
+    // Modificar processData para actualizar Locations al cargar archivo
+    const originalProcessData = processData;
+    processData = function (data) {
+        originalProcessData(data);
+        setTimeout(refreshLocations, 100); // Async helper
+    };
 
-        const newRow = {};
-        // Llenar con strings vacíos por defecto
-        globalHeaders.forEach(h => newRow[h] = "");
-
-        // Asignar valores específicos
-        // Columna 1 (Index 0): Equipo (QR)
-        newRow[globalHeaders[0]] = qrCode;
-
-        // Columna 3 (Index 2): Serie
-        if (globalHeaders.length > 2) {
-            newRow[globalHeaders[2]] = serialNumber;
-        }
-
-        // Columna 5 (Index 4): Fecha Actual (por defecto)
-        if (globalHeaders.length > 4) {
-            newRow[globalHeaders[4]] = new Date();
-        }
-
-        // Agregar a datos globales
-        globalDataRaw.push(newRow);
-
-        // Refrescar tabla
-        processData(globalDataRaw);
-
-        // Feedback
-        alert(`✅ ¡Nuevo equipo agregado!\n\nID: ${qrCode}\nSerie: ${serialNumber}`);
-        qrInput.value = "";
-        editPanel.classList.add('hidden');
-        scanResult.classList.add('hidden');
-    }
 
     function findAndSetupEdit(scannedId) {
         // Asumiendo Columna 1 = index 0

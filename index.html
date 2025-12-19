@@ -80,6 +80,36 @@
         </div>
     </div>
 
+    <!-- Modal REGISTRO NUEVO EQUIPO -->
+    <div id="registerModal" class="modal-overlay hidden">
+        <div class="modal-card" style="text-align: left;">
+            <h3 style="color: #4ade80; margin-top: 0; text-align: center;">✅ Nuevo Equipo detectado</h3>
+
+            <div class="input-group" style="margin-bottom: 15px;">
+                <label>1. ID / Código (Col. 1):</label>
+                <input type="text" id="regIdInput" placeholder="Ej: EQ-2025-X">
+            </div>
+
+            <div class="input-group" style="margin-bottom: 15px;">
+                <label>2. N° Serie (OCR) (Col. 3):</label>
+                <input type="text" id="regSerieInput" style="border-color: #fbbf24;">
+            </div>
+
+            <div class="input-group" style="margin-bottom: 20px;">
+                <label>3. Ubicación Técnica (Col. 4):</label>
+                <select id="regLocationSelect"
+                    style="width: 100%; padding: 10px; background: rgba(17, 24, 39, 0.6); color: white; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; outline: none;">
+                    <option value="">-- Seleccionar --</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button id="confirmRegBtn" class="primary-btn" style="flex: 1;">Guardar</button>
+                <button id="cancelRegBtn" class="secondary-btn" style="flex: 1; background: #334155;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <div class="background-globes">
         <div class="globe globe-1"></div>
         <div class="globe globe-2"></div>
@@ -110,6 +140,9 @@
             <h2>Verificación de Equipos</h2>
             <div class="scan-controls">
                 <button id="startScanBtn" class="secondary-btn">📷 Escanear QR</button>
+                <button id="startDirectOcrBtn" class="secondary-btn"
+                    style="background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.4);">📝 Registrar x
+                    Serie</button>
                 <button id="stopScanBtn" class="secondary-btn hidden">Desactivar Cámara</button>
             </div>
 
