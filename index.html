@@ -28,6 +28,10 @@
             align-items: center;
         }
 
+        .modal-overlay.hidden {
+            display: none !important;
+        }
+
         .modal-card {
             background: #1e293b;
             padding: 20px;
@@ -131,6 +135,15 @@
             </div>
 
             <div id="scanResult" class="scan-result hidden"></div>
+
+            <!-- DEBUG CONSOLE -->
+            <div id="debugConsole"
+                style="margin-top:20px; padding:10px; background:#000; color:#0f0; font-family:monospace; font-size:10px; max-height:150px; overflow-y:scroll; border:1px solid #333; display:none;">
+                <strong>DEBUG LOG:</strong><br>
+            </div>
+            <button id="toggleDebug"
+                style="margin-top:10px; font-size:10px; background:transparent; border:1px solid #555; color:#555;">Mostrar
+                Debug</button>
         </section>
 
         <div id="resultsArea" class="hidden">

@@ -5,6 +5,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadingDiv = document.getElementById('loading');
     const resultsArea = document.getElementById('resultsArea');
 
+    // --- DEBUG LOGGER ---
+    const debugConsole = document.getElementById('debugConsole');
+    const toggleDebug = document.getElementById('toggleDebug');
+
+    toggleDebug.addEventListener('click', () => {
+        debugConsole.style.display = debugConsole.style.display === 'none' ? 'block' : 'none';
+    });
+
+    function logToScreen(msg, type = 'INFO') {
+        const line = document.createElement('div');
+        line.style.color = type === 'ERROR' ? '#f87171' : '#4ade80';
+        line.style.borderBottom = '1px solid #333';
+        line.textContent = `[${new Date().toLocaleTimeString()}] [${type}] ${msg}`;
+        debugConsole.appendChild(line);
+        debugConsole.scrollTop = debugConsole.scrollHeight;
+    }
+
+    // Sobreescribir console para capturar errores de Tesseract/Cámara
+    const originalLog = console.log;
+    const originalError = console.error;
+
+    console.log = (...args) => {
+        originalLog(...args);
+        logToScreen(args.join(' '));
+    };
+
+    console.error = (...args) => {
+        originalError(...args);
+        logToScreen(args.join(' '), 'ERROR');
+    };
+
+    // Variables Globales para Estado
     // Variables Globales para Estado
     let globalDataRaw = [];
     let globalHeaders = [];
