@@ -414,7 +414,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!idVal) { alert("Debes ingresar un ID (Col. 1)."); return; }
         if (!serieVal) { alert("Debes tener un N° Serie (OCR)."); return; }
-        // Ubicacion es opcional? Asumimos que si el usuario no elige, se va vacio.
+
+        // --- VALIDACIÓN DE DUPLICADOS (AHORA AQUÍ) ---
+        if (globalHeaders.length > 2) {
+            const serieKey = globalHeaders[2];
+            const normalize = s => (s || '').toString().trim().toUpperCase();
+            const targetSerial = normalize(serieVal);
+
+            const duplicateIndex = globalDataRaw.findIndex(row => normalize(row[serieKey]) === targetSerial);
+
+            if (duplicateIndex !== -1) {
+                const proceed = confirm(`⚠️ ¡ADVERTENCIA DE DUPLICADO!\n\nEl N° Serie "${serieVal}" ya existe en la fila ${duplicateIndex + 2}.\n\n¿Quieres guardarlo de todas formas?`);
+                if (!proceed) return;
+            }
+        }
 
         saveNewEquipment(idVal, serieVal, locVal);
         registerModal.classList.add('hidden');
@@ -439,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
         processData(globalDataRaw);
         refreshLocations(); // Update list in case we want to reuse logic later for adding new locations (not implemented yet but good practice)
 
-        alert(`✅ Equipo guardado!\nID: ${id}\nSerie: ${serie}\nUbicación: ${location || 'N/A'}`);
+        alert(`✅ Equipo guardado!`);
         qrInput.value = "";
         editPanel.classList.add('hidden');
         scanResult.classList.add('hidden');
@@ -460,42 +473,35 @@ document.addEventListener('DOMContentLoaded', () => {
         ocrProcessing.classList.remove('hidden');
         ocrBar.style.width = "0%";
 
+        // OPTIMIZACIÓN: Whitelist para números y letras mayúsculas
         Tesseract.recognize(
             ocrCanvas.toDataURL('image/png'),
             'eng',
-            { logger: m => { if (m.status === 'recognizing text') ocrBar.style.width = `${Math.floor(m.progress * 100)}%`; } }
+            {
+                logger: m => { if (m.status === 'recognizing text') ocrBar.style.width = `${Math.floor(m.progress * 100)}%`; },
+                tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'
+            }
         ).then(({ data: { text } }) => {
-            const cleanedSerial = text.replace(/[^A-Za-z0-9-]/g, '').trim();
+            // Limpieza más agresiva: Solo letras, números y guiones
+            // Convertimos a mayúsculas para mejorar consistencia
+            const cleanedSerial = text.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase().trim();
 
             if (!cleanedSerial) {
-                alert("No se detectó texto. Intenta de nuevo.");
+                alert("No se detectaron números ni letras claras. Intenta acercar la cámara.");
                 closeOcrModal();
                 return;
             }
 
-            // --- PASO 1: CHEQUEO DE DUPLICADOS EN COLUMNA 3 (Index 2) ---
-            if (globalHeaders.length > 2) {
-                const serieKey = globalHeaders[2];
-                const normalize = s => (s || '').toString().trim().toUpperCase();
-                const targetSerial = normalize(cleanedSerial);
-
-                const duplicateIndex = globalDataRaw.findIndex(row => normalize(row[serieKey]) === targetSerial);
-
-                if (duplicateIndex !== -1) {
-                    alert(`⚠️ ¡ATENCIÓN!\n\nEl N° de Serie "${cleanedSerial}" YA EXISTE en la fila ${duplicateIndex + 2}.\nNo se puede registrar de nuevo.`);
-                    closeOcrModal();
-                    return;
-                }
-            }
-
-            // --- PASO 2: ABRIR MODAL DE REGISTRO ---
+            // --- ABRIR DE INMEDIATO PARA EDICIÓN (SIN VALIDAR AÚN) ---
             closeOcrModal();
             registerModal.classList.remove('hidden');
 
-            // Pre-fill fields
-            regIdInput.value = pendingQrCode || ""; // Si venimos de "QR no encontrado", usar ese ID.
-            regSerieInput.value = cleanedSerial;
-            populateLocations(); // Asegurar lista fresca
+            regIdInput.value = pendingQrCode || "";
+            regSerieInput.value = cleanedSerial; // Mostrar resultado para editar
+            populateLocations();
+
+            // Foco en el serie para editar rápido
+            setTimeout(() => regSerieInput.focus(), 100);
 
         }).catch(err => {
             console.error(err);
