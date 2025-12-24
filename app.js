@@ -150,16 +150,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function populateLocations() {
-        const locKey = getColumnKey('ubicacion');
-        if (!locKey) return;
+        // Buscar columna que contenga "ubicacion" o "tecnica" o "location"
+        const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica') || getColumnKey('location');
+        
+        console.log("Headers disponibles:", globalHeaders);
+        console.log("Columna ubicación encontrada:", locKey);
+        
+        if (!locKey) {
+            console.warn("No se encontró columna de ubicación. Headers:", globalHeaders);
+            // Mostrar todas las columnas en el select para debug
+            regLocationSelect.innerHTML = '<option value="">-- No se encontró columna ubicación --</option>';
+            return;
+        }
 
         const locSet = new Set();
         globalDataRaw.forEach(row => {
             const val = row[locKey];
-            if (val && String(val).trim()) locSet.add(String(val).trim());
+            if (val && String(val).trim()) {
+                locSet.add(String(val).trim());
+            }
         });
 
-        regLocationSelect.innerHTML = '<option value="">-- Seleccionar --</option>';
+        console.log("Ubicaciones encontradas:", Array.from(locSet));
+
+        regLocationSelect.innerHTML = '<option value="">-- Seleccionar Ubicación --</option>';
         Array.from(locSet).sort().forEach(loc => {
             const opt = document.createElement('option');
             opt.value = loc;
@@ -186,6 +200,48 @@ document.addEventListener('DOMContentLoaded', () => {
         registerModal.classList.add('hidden');
     });
 
+    // Filtro en tiempo real mientras escribe la serie
+    regSerieInput.addEventListener('input', () => {
+        const searchVal = regSerieInput.value.trim().toUpperCase();
+        
+        if (searchVal.length < 2) {
+            regFeedback.classList.add('hidden');
+            return;
+        }
+
+        const serieKey = getColumnKey('serie');
+        if (!serieKey) return;
+
+        const normalize = s => String(s || '').trim().toUpperCase();
+        
+        // Buscar coincidencia exacta
+        const exactMatch = globalDataRaw.findIndex(row => normalize(row[serieKey]) === searchVal);
+        
+        if (exactMatch !== -1) {
+            const row = globalDataRaw[exactMatch];
+            const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
+            regFeedback.textContent = `⚠️ Serie existe (fila ${exactMatch + 2}) - Ubicación: ${locKey ? row[locKey] : 'N/A'}`;
+            regFeedback.className = 'feedback warning';
+            regFeedback.classList.remove('hidden');
+        } else {
+            // Buscar coincidencias parciales
+            const partialMatches = globalDataRaw.filter(row => normalize(row[serieKey]).includes(searchVal));
+            
+            if (partialMatches.length > 0 && partialMatches.length <= 5) {
+                const matches = partialMatches.map(r => r[serieKey]).join(', ');
+                regFeedback.textContent = `🔍 Similares: ${matches}`;
+                regFeedback.className = 'feedback warning';
+                regFeedback.classList.remove('hidden');
+            } else if (partialMatches.length === 0) {
+                regFeedback.textContent = `✅ Serie disponible para registrar`;
+                regFeedback.className = 'feedback success';
+                regFeedback.classList.remove('hidden');
+            } else {
+                regFeedback.classList.add('hidden');
+            }
+        }
+    });
+
     confirmRegBtn.addEventListener('click', () => {
         const serieVal = regSerieInput.value.trim().toUpperCase();
         const locVal = regLocationSelect.value;
@@ -200,10 +256,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const serieKey = getColumnKey('serie');
-        const locKey = getColumnKey('ubicacion');
+        const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
 
         if (!serieKey) {
-            alert("No se encontró columna 'Serie' en el Excel.");
+            alert("No se encontró columna 'Serie' en el Excel. Columnas disponibles: " + globalHeaders.join(', '));
             return;
         }
 
