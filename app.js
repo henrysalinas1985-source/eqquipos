@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const editPanel = document.getElementById('editPanel');
     const matchInfo = document.getElementById('matchInfo');
     const equipoNombre = document.getElementById('equipoNombre');
+    const editLocationSelect = document.getElementById('editLocationSelect');
     const dateInput = document.getElementById('dateInput');
     const editObservaciones = document.getElementById('editObservaciones');
     const updateBtn = document.getElementById('updateBtn');
@@ -149,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const normalize = s => String(s || '').trim().toUpperCase();
         const filterNorm = normalize(filterValue);
 
-        globalDataRaw.forEach(row => {
+        globalDataRaw.forEach((row, index) => {
             // Filtrar por serie si hay filtro
             if (filterValue && serieKey) {
                 const serieVal = normalize(row[serieKey]);
@@ -157,6 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.addEventListener('click', () => openEditFromTable(index));
+            
             globalHeaders.forEach(h => {
                 const td = document.createElement('td');
                 let val = row[h];
@@ -166,6 +170,45 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             tbody.appendChild(tr);
         });
+    }
+
+    // Abrir edición desde la tabla
+    function openEditFromTable(index) {
+        currentMatchIndex = index;
+        const row = globalDataRaw[index];
+
+        const idKey = globalHeaders[0];
+        const serieKey = getColumnKey('serie');
+        const equipoKey = getColumnKey('equipo');
+        const obsKey = getColumnKey('observacion');
+        const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
+
+        scanResult.textContent = `📝 Editando fila ${index + 2}`;
+        scanResult.className = 'feedback success';
+        scanResult.classList.remove('hidden');
+
+        matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? row[serieKey] : 'N/A'}`;
+        
+        equipoNombre.textContent = equipoKey ? (row[equipoKey] || 'Sin nombre') : 'N/A';
+        editObservaciones.value = obsKey ? (row[obsKey] || '') : '';
+        
+        // Cargar ubicación actual
+        if (locKey && row[locKey]) {
+            editLocationSelect.value = row[locKey];
+        } else {
+            editLocationSelect.value = '';
+        }
+        
+        const dateKey = getColumnKey('calibracion') || getColumnKey('fecha');
+        if (dateKey) {
+            dateInput.value = formatDateForInput(row[dateKey]);
+            dateInput.dataset.targetKey = dateKey;
+        }
+
+        editPanel.classList.remove('hidden');
+        
+        // Scroll al panel de edición
+        editPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     // Evento filtro de tabla
@@ -182,8 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!locKey) {
             console.warn("No se encontró columna de ubicación. Headers:", globalHeaders);
-            // Mostrar todas las columnas en el select para debug
             regLocationSelect.innerHTML = '<option value="">-- No se encontró columna ubicación --</option>';
+            editLocationSelect.innerHTML = '<option value="">-- No se encontró columna ubicación --</option>';
             return;
         }
 
@@ -197,13 +240,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         console.log("Ubicaciones encontradas:", Array.from(locSet));
 
-        regLocationSelect.innerHTML = '<option value="">-- Seleccionar Ubicación --</option>';
-        Array.from(locSet).sort().forEach(loc => {
-            const opt = document.createElement('option');
-            opt.value = loc;
-            opt.textContent = loc;
-            regLocationSelect.appendChild(opt);
-        });
+        const options = '<option value="">-- Seleccionar Ubicación --</option>' + 
+            Array.from(locSet).sort().map(loc => `<option value="${loc}">${loc}</option>`).join('');
+        
+        regLocationSelect.innerHTML = options;
+        editLocationSelect.innerHTML = options;
     }
 
     // --- REGISTRO SERIE ---
@@ -429,6 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const serieKey = getColumnKey('serie');
             const equipoKey = getColumnKey('equipo');
             const obsKey = getColumnKey('observacion');
+            const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
 
             matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? row[serieKey] : 'N/A'}`;
             
@@ -437,6 +479,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Cargar observaciones existentes
             editObservaciones.value = obsKey ? (row[obsKey] || '') : '';
+            
+            // Cargar ubicación actual
+            if (locKey && row[locKey]) {
+                editLocationSelect.value = row[locKey];
+            } else {
+                editLocationSelect.value = '';
+            }
             
             const dateKey = getColumnKey('calibracion') || getColumnKey('fecha');
             if (dateKey) {
@@ -460,22 +509,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ACTUALIZAR FECHA Y OBSERVACIONES ---
+    // --- ACTUALIZAR FECHA, UBICACIÓN Y OBSERVACIONES ---
     updateBtn.addEventListener('click', () => {
         if (currentMatchIndex === -1) return;
 
         const newDate = dateInput.value;
         const newObs = editObservaciones.value.trim();
-
-        if (!newDate) {
-            alert("Selecciona una fecha.");
-            return;
-        }
+        const newLoc = editLocationSelect.value;
 
         const targetKey = dateInput.dataset.targetKey;
         const obsKey = getColumnKey('observacion');
+        const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
 
-        if (targetKey) {
+        if (targetKey && newDate) {
             const [y, m, d] = newDate.split('-').map(Number);
             globalDataRaw[currentMatchIndex][targetKey] = new Date(y, m - 1, d);
         }
@@ -484,9 +530,16 @@ document.addEventListener('DOMContentLoaded', () => {
             globalDataRaw[currentMatchIndex][obsKey] = newObs;
         }
 
+        if (locKey && newLoc) {
+            globalDataRaw[currentMatchIndex][locKey] = newLoc;
+        }
+
         alert(`✅ Actualizado (fila ${currentMatchIndex + 2})`);
         editPanel.classList.add('hidden');
         scanResult.classList.add('hidden');
-        renderTable();
+        
+        // Mantener el filtro actual
+        const filterInput = document.getElementById('filterSerieInput');
+        renderTable(filterInput ? filterInput.value : '');
     });
 });
