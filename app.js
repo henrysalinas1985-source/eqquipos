@@ -161,14 +161,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const observacionesContainer = document.getElementById('observacionesContainer');
     const addObsBtn = document.getElementById('addObsBtn');
     const updateBtn = document.getElementById('updateBtn');
-    const editImageContainer = document.getElementById('editImageContainer');
-    const editImagePreview = document.getElementById('editImagePreview');
-    const editImageName = document.getElementById('editImageName');
+    const editImagesGallery = document.getElementById('editImagesGallery');
     const noImageMsg = document.getElementById('noImageMsg');
-    const editImageInput = document.getElementById('editImageInput');
-    const loadImageBtn = document.getElementById('loadImageBtn');
+    const editCameraContainer = document.getElementById('editCameraContainer');
+    const editCameraVideo = document.getElementById('editCameraVideo');
+    const addImageBtn = document.getElementById('addImageBtn');
+    const captureEditPhotoBtn = document.getElementById('captureEditPhotoBtn');
+    const cancelEditCameraBtn = document.getElementById('cancelEditCameraBtn');
     let currentMatchIndex = -1;
-    let currentImageRef = null;
+    let editCameraStream = null;
 
     // Elementos de Registro
     const registerSerieBtn = document.getElementById('registerSerieBtn');
@@ -331,16 +332,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Abrir edición desde la tabla
-    function openEditFromTable(index) {
+    async function openEditFromTable(index) {
         currentMatchIndex = index;
         const row = globalDataRaw[index];
 
         const idKey = globalHeaders[0];
         const serieKey = getColumnKey('serie');
         const equipoKey = getColumnKey('equipo');
-        const obsKey = getColumnKey('observacion');
         const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
-        const imgKey = getColumnKey('imagen') || getColumnKey('foto');
 
         scanResult.textContent = `📝 Editando fila ${index + 2}`;
         scanResult.className = 'feedback success';
@@ -360,32 +359,8 @@ document.addEventListener('DOMContentLoaded', () => {
             editLocationSelect.value = '';
         }
         
-        // Mostrar referencia de imagen si existe
-        currentImageRef = null;
-        editImageInput.value = '';
-        if (imgKey && row[imgKey]) {
-            currentImageRef = row[imgKey];
-            editImageName.textContent = row[imgKey];
-            editImageContainer.classList.remove('hidden');
-            noImageMsg.classList.add('hidden');
-            loadImageBtn.textContent = '📂 Cambiar Imagen';
-            
-            // Cargar imagen desde IndexedDB
-            getImageFromDB(row[imgKey]).then(dataUrl => {
-                if (dataUrl) {
-                    editImagePreview.src = dataUrl;
-                    editImagePreview.style.display = 'block';
-                } else {
-                    editImagePreview.style.display = 'none';
-                    editImageName.textContent = row[imgKey] + ' (no encontrada en este dispositivo)';
-                }
-            });
-        } else {
-            editImageContainer.classList.add('hidden');
-            editImagePreview.style.display = 'block';
-            noImageMsg.classList.remove('hidden');
-            loadImageBtn.textContent = '📂 Cargar Imagen';
-        }
+        // Cargar galería de imágenes
+        await loadImagesForRow(row);
         
         const dateKey = getColumnKey('calibracion') || getColumnKey('fecha');
         if (dateKey) {
@@ -404,9 +379,146 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTable(this.value);
     });
 
-    // --- CARGAR IMAGEN EN EDICIÓN ---
-    loadImageBtn.addEventListener('click', () => {
-        editImageInput.click();
+    // --- CARGAR MÚLTIPLES IMÁGENES EN EDICIÓN ---
+    function getImageColumns() {
+        const normalize = str => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return globalHeaders.filter(h => normalize(h).includes('imagen') || normalize(h).includes('foto'));
+    }
+
+    async function loadImagesForRow(row) {
+        editImagesGallery.innerHTML = '';
+        const imgCols = getImageColumns();
+        let hasImages = false;
+
+        for (const col of imgCols) {
+            if (row[col]) {
+                hasImages = true;
+                const imgRef = row[col];
+                const dataUrl = await getImageFromDB(imgRef);
+                
+                const imgContainer = document.createElement('div');
+                imgContainer.style.cssText = 'position:relative; width:calc(50% - 4px);';
+                
+                if (dataUrl) {
+                    imgContainer.innerHTML = `
+                        <img src="${dataUrl}" style="width:100%; height:80px; object-fit:cover; border-radius:8px; border:2px solid #00ff88;">
+                        <small style="color:#888; font-size:0.7rem; display:block; text-align:center; margin-top:2px;">${imgRef}</small>
+                    `;
+                } else {
+                    imgContainer.innerHTML = `
+                        <div style="width:100%; height:80px; background:rgba(255,255,255,0.05); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.75rem;">No encontrada</div>
+                        <small style="color:#888; font-size:0.7rem; display:block; text-align:center; margin-top:2px;">${imgRef}</small>
+                    `;
+                }
+                editImagesGallery.appendChild(imgContainer);
+            }
+        }
+
+        if (hasImages) {
+            noImageMsg.classList.add('hidden');
+        } else {
+            noImageMsg.classList.remove('hidden');
+        }
+    }
+
+    function stopEditCamera() {
+        if (editCameraStream) {
+            editCameraStream.getTracks().forEach(track => track.stop());
+            editCameraStream = null;
+        }
+        editCameraContainer.classList.add('hidden');
+        captureEditPhotoBtn.classList.add('hidden');
+        cancelEditCameraBtn.classList.add('hidden');
+        addImageBtn.classList.remove('hidden');
+    }
+
+    addImageBtn.addEventListener('click', async () => {
+        if (currentMatchIndex === -1) {
+            alert('Primero selecciona un equipo');
+            return;
+        }
+
+        addImageBtn.textContent = '⏳ Abriendo...';
+        addImageBtn.disabled = true;
+
+        try {
+            editCameraStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }
+            });
+            
+            editCameraVideo.srcObject = editCameraStream;
+            editCameraContainer.classList.remove('hidden');
+            addImageBtn.classList.add('hidden');
+            captureEditPhotoBtn.classList.remove('hidden');
+            cancelEditCameraBtn.classList.remove('hidden');
+        } catch (e) {
+            alert('No se pudo acceder a la cámara: ' + e.message);
+        }
+
+        addImageBtn.textContent = '📷 Agregar Foto';
+        addImageBtn.disabled = false;
+    });
+
+    cancelEditCameraBtn.addEventListener('click', stopEditCamera);
+
+    captureEditPhotoBtn.addEventListener('click', async () => {
+        // Reducir resolución para evitar problemas de memoria
+        const maxWidth = 800;
+        const maxHeight = 600;
+        
+        let width = editCameraVideo.videoWidth;
+        let height = editCameraVideo.videoHeight;
+        
+        // Escalar si es muy grande
+        if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+        }
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(editCameraVideo, 0, 0, width, height);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.5); // Más compresión
+        stopEditCamera();
+
+        // Determinar nombre de archivo y columna
+        const row = globalDataRaw[currentMatchIndex];
+        const serieKey = getColumnKey('serie');
+        const serieVal = serieKey ? row[serieKey] : `equipo_${currentMatchIndex}`;
+        
+        const imgCols = getImageColumns();
+        let colIndex = 1;
+        
+        // Buscar siguiente columna disponible
+        for (const col of imgCols) {
+            if (!row[col]) break;
+            colIndex++;
+        }
+
+        const newColName = colIndex === 1 ? 'Imagen' : `Imagen ${colIndex}`;
+        const imgFilename = `${String(serieVal).replace(/[^a-zA-Z0-9]/g, '_')}_${colIndex}.jpg`;
+
+        // Crear columna si no existe
+        if (!globalHeaders.includes(newColName)) {
+            globalHeaders.push(newColName);
+            globalDataRaw.forEach(r => { if (!(newColName in r)) r[newColName] = ''; });
+        }
+
+        // Guardar referencia y en IndexedDB
+        globalDataRaw[currentMatchIndex][newColName] = imgFilename;
+        
+        try {
+            await saveImageToDB(imgFilename, dataUrl);
+            downloadImage(dataUrl, imgFilename);
+            await loadImagesForRow(globalDataRaw[currentMatchIndex]);
+            console.log(`Imagen guardada: ${imgFilename}`);
+        } catch (err) {
+            console.error('Error guardando imagen:', err);
+            alert('Error al guardar imagen. Intenta de nuevo.');
+        }
     });
 
     // --- MÚLTIPLES OBSERVACIONES ---
@@ -499,41 +611,6 @@ document.addEventListener('DOMContentLoaded', () => {
         observacionesContainer.lastChild.scrollIntoView({ behavior: 'smooth' });
     });
 
-    editImageInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file && currentMatchIndex !== -1) {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const dataUrl = ev.target.result;
-                editImagePreview.src = dataUrl;
-                editImagePreview.style.display = 'block';
-                editImageName.textContent = file.name;
-                editImageContainer.classList.remove('hidden');
-                noImageMsg.classList.add('hidden');
-                
-                // Guardar en IndexedDB y actualizar referencia
-                const serieKey = getColumnKey('serie');
-                const imgKey = getColumnKey('imagen') || getColumnKey('foto');
-                const row = globalDataRaw[currentMatchIndex];
-                const serieVal = serieKey ? row[serieKey] : `equipo_${currentMatchIndex}`;
-                const imgFilename = `${String(serieVal).replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
-                
-                if (imgKey) {
-                    globalDataRaw[currentMatchIndex][imgKey] = imgFilename;
-                }
-                
-                saveImageToDB(imgFilename, dataUrl)
-                    .then(() => {
-                        console.log('Imagen cargada y guardada:', imgFilename);
-                        currentImageRef = imgFilename;
-                        editImageName.textContent = imgFilename;
-                    })
-                    .catch(console.error);
-            };
-            reader.readAsDataURL(file);
-        }
-    });
-
     function populateLocations() {
         // Buscar columna que contenga "ubicacion" o "tecnica" o "location"
         const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica') || getColumnKey('location');
@@ -613,8 +690,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cameraStream = await navigator.mediaDevices.getUserMedia({
                 video: { 
                     facingMode: "environment",
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
                 }
             });
             
@@ -632,12 +709,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     capturePhotoBtn.addEventListener('click', () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = cameraVideo.videoWidth;
-        canvas.height = cameraVideo.videoHeight;
-        canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
+        // Reducir resolución para evitar problemas de memoria
+        const maxWidth = 800;
+        const maxHeight = 600;
         
-        capturedImageData = canvas.toDataURL('image/jpeg', 0.7);
+        let width = cameraVideo.videoWidth;
+        let height = cameraVideo.videoHeight;
+        
+        if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+        }
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(cameraVideo, 0, 0, width, height);
+        
+        capturedImageData = canvas.toDataURL('image/jpeg', 0.5);
         capturedImage.src = capturedImageData;
         
         stopCamera();
@@ -877,7 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
         findOrRegister(finalValue);
     }
 
-    function findOrRegister(scannedValue) {
+    async function findOrRegister(scannedValue) {
         const normalize = s => String(s || '').trim().toUpperCase();
         const target = normalize(scannedValue);
 
@@ -899,12 +989,8 @@ document.addEventListener('DOMContentLoaded', () => {
             scanResult.className = 'feedback success';
             scanResult.classList.remove('hidden');
 
-            const idKey = globalHeaders[0];
-            const serieKey = getColumnKey('serie');
             const equipoKey = getColumnKey('equipo');
-            const obsKey = getColumnKey('observacion');
             const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
-            const imgKey = getColumnKey('imagen') || getColumnKey('foto');
 
             matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? row[serieKey] : 'N/A'}`;
             
@@ -921,32 +1007,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 editLocationSelect.value = '';
             }
             
-            // Mostrar referencia de imagen si existe
-            currentImageRef = null;
-            editImageInput.value = '';
-            if (imgKey && row[imgKey]) {
-                currentImageRef = row[imgKey];
-                editImageName.textContent = row[imgKey];
-                editImageContainer.classList.remove('hidden');
-                noImageMsg.classList.add('hidden');
-                loadImageBtn.textContent = '📂 Cambiar Imagen';
-                
-                // Cargar imagen desde IndexedDB
-                getImageFromDB(row[imgKey]).then(dataUrl => {
-                    if (dataUrl) {
-                        editImagePreview.src = dataUrl;
-                        editImagePreview.style.display = 'block';
-                    } else {
-                        editImagePreview.style.display = 'none';
-                        editImageName.textContent = row[imgKey] + ' (no encontrada en este dispositivo)';
-                    }
-                });
-            } else {
-                editImageContainer.classList.add('hidden');
-                editImagePreview.style.display = 'block';
-                noImageMsg.classList.remove('hidden');
-                loadImageBtn.textContent = '📂 Cargar Imagen';
-            }
+            // Cargar galería de imágenes
+            await loadImagesForRow(row);
             
             const dateKey = getColumnKey('calibracion') || getColumnKey('fecha');
             if (dateKey) {

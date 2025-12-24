@@ -435,18 +435,21 @@
                     <div id="equipoNombre" style="color: #00ff88; font-size: 1.4rem; font-weight: 700;"></div>
                 </div>
                 
-                <!-- Visualizar/Cargar imagen -->
+                <!-- Visualizar/Cargar imágenes -->
                 <div class="input-group">
-                    <label>📷 Foto del Equipo</label>
-                    <div id="editImageContainer" class="hidden" style="margin-bottom:10px; text-align:center;">
-                        <img id="editImagePreview" style="max-width:100%; max-height:200px; border-radius:10px; border:2px solid #00ff88;">
-                        <p id="editImageName" style="color:#888; font-size:0.8rem; margin-top:5px;"></p>
-                    </div>
+                    <label>📷 Fotos del Equipo</label>
+                    <div id="editImagesGallery" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;"></div>
                     <div id="noImageMsg" class="hidden" style="padding:20px; background:rgba(255,255,255,0.05); border-radius:10px; text-align:center; color:#888; margin-bottom:10px;">
-                        Sin imagen registrada
+                        Sin imágenes registradas
                     </div>
-                    <input type="file" id="editImageInput" accept="image/*" style="display:none;">
-                    <button type="button" id="loadImageBtn" class="btn btn-secondary" style="width:100%; padding:10px; font-size:0.9rem;">📂 Cargar Imagen</button>
+                    <div id="editCameraContainer" class="hidden" style="margin-bottom:10px;">
+                        <video id="editCameraVideo" autoplay playsinline style="width:100%; max-height:200px; object-fit:cover; border-radius:10px; border:2px solid #00d9ff;"></video>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <button type="button" id="addImageBtn" class="btn btn-secondary" style="padding:10px; font-size:0.9rem;">📷 Agregar Foto</button>
+                        <button type="button" id="captureEditPhotoBtn" class="btn btn-primary hidden" style="padding:10px; font-size:0.9rem;">📸 Capturar</button>
+                        <button type="button" id="cancelEditCameraBtn" class="btn btn-secondary hidden" style="padding:10px; font-size:0.9rem;">❌ Cancelar</button>
+                    </div>
                 </div>
                 
                 <div class="input-group">
