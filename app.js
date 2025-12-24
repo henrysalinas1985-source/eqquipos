@@ -16,7 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Elementos de Edición
     const editPanel = document.getElementById('editPanel');
     const matchInfo = document.getElementById('matchInfo');
+    const equipoNombre = document.getElementById('equipoNombre');
     const dateInput = document.getElementById('dateInput');
+    const editObservaciones = document.getElementById('editObservaciones');
     const updateBtn = document.getElementById('updateBtn');
     let currentMatchIndex = -1;
 
@@ -376,7 +378,18 @@ document.addEventListener('DOMContentLoaded', () => {
             scanResult.className = 'feedback success';
             scanResult.classList.remove('hidden');
 
+            const idKey = globalHeaders[0];
+            const serieKey = getColumnKey('serie');
+            const equipoKey = getColumnKey('equipo');
+            const obsKey = getColumnKey('observacion');
+
             matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? row[serieKey] : 'N/A'}`;
+            
+            // Mostrar nombre del equipo
+            equipoNombre.textContent = equipoKey ? (row[equipoKey] || 'Sin nombre') : 'N/A';
+            
+            // Cargar observaciones existentes
+            editObservaciones.value = obsKey ? (row[obsKey] || '') : '';
             
             const dateKey = getColumnKey('calibracion') || getColumnKey('fecha');
             if (dateKey) {
@@ -400,23 +413,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ACTUALIZAR FECHA ---
+    // --- ACTUALIZAR FECHA Y OBSERVACIONES ---
     updateBtn.addEventListener('click', () => {
         if (currentMatchIndex === -1) return;
 
         const newDate = dateInput.value;
+        const newObs = editObservaciones.value.trim();
+
         if (!newDate) {
             alert("Selecciona una fecha.");
             return;
         }
 
         const targetKey = dateInput.dataset.targetKey;
-        if (!targetKey) return;
+        const obsKey = getColumnKey('observacion');
 
-        const [y, m, d] = newDate.split('-').map(Number);
-        globalDataRaw[currentMatchIndex][targetKey] = new Date(y, m - 1, d);
+        if (targetKey) {
+            const [y, m, d] = newDate.split('-').map(Number);
+            globalDataRaw[currentMatchIndex][targetKey] = new Date(y, m - 1, d);
+        }
 
-        alert(`✅ Fecha actualizada (fila ${currentMatchIndex + 2})`);
+        if (obsKey) {
+            globalDataRaw[currentMatchIndex][obsKey] = newObs;
+        }
+
+        alert(`✅ Actualizado (fila ${currentMatchIndex + 2})`);
         editPanel.classList.add('hidden');
         scanResult.classList.add('hidden');
         renderTable();
