@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const startCameraBtn = document.getElementById('startCameraBtn');
     const capturePhotoBtn = document.getElementById('capturePhotoBtn');
     const retakePhotoBtn = document.getElementById('retakePhotoBtn');
+    const deletePhotoBtn = document.getElementById('deletPhotoBtn');
     let cameraStream = null;
     let capturedImageData = null;
 
@@ -286,6 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startCameraBtn.classList.remove('hidden');
         capturePhotoBtn.classList.add('hidden');
         retakePhotoBtn.classList.add('hidden');
+        deletePhotoBtn.classList.add('hidden');
         capturedImageData = null;
     }
 
@@ -297,26 +299,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     startCameraBtn.addEventListener('click', async () => {
+        startCameraBtn.textContent = '⏳ Cargando...';
+        startCameraBtn.disabled = true;
+        
         try {
             cameraStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { exact: "environment" } }
+                video: { 
+                    facingMode: "environment",
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
             });
+            
+            cameraVideo.srcObject = cameraStream;
+            cameraContainer.classList.remove('hidden');
+            startCameraBtn.classList.add('hidden');
+            capturePhotoBtn.classList.remove('hidden');
+            
         } catch (e) {
-            // Fallback si no hay cámara trasera
-            try {
-                cameraStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" }
-                });
-            } catch (e2) {
-                alert("No se pudo acceder a la cámara");
-                return;
-            }
+            alert("No se pudo acceder a la cámara: " + e.message);
         }
         
-        cameraVideo.srcObject = cameraStream;
-        cameraContainer.classList.remove('hidden');
-        startCameraBtn.classList.add('hidden');
-        capturePhotoBtn.classList.remove('hidden');
+        startCameraBtn.textContent = '📷 Abrir Cámara';
+        startCameraBtn.disabled = false;
     });
 
     capturePhotoBtn.addEventListener('click', () => {
@@ -325,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.height = cameraVideo.videoHeight;
         canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
         
-        capturedImageData = canvas.toDataURL('image/jpeg', 0.8);
+        capturedImageData = canvas.toDataURL('image/jpeg', 0.7);
         capturedImage.src = capturedImageData;
         
         stopCamera();
@@ -333,13 +338,23 @@ document.addEventListener('DOMContentLoaded', () => {
         capturedImage.classList.remove('hidden');
         capturePhotoBtn.classList.add('hidden');
         retakePhotoBtn.classList.remove('hidden');
+        deletePhotoBtn.classList.remove('hidden');
     });
 
     retakePhotoBtn.addEventListener('click', () => {
         capturedImage.classList.add('hidden');
         retakePhotoBtn.classList.add('hidden');
+        deletePhotoBtn.classList.add('hidden');
         capturedImageData = null;
-        startCameraBtn.click(); // Reabrir cámara
+        startCameraBtn.click();
+    });
+
+    deletePhotoBtn.addEventListener('click', () => {
+        capturedImage.classList.add('hidden');
+        retakePhotoBtn.classList.add('hidden');
+        deletePhotoBtn.classList.add('hidden');
+        startCameraBtn.classList.remove('hidden');
+        capturedImageData = null;
     });
 
     function downloadImage(dataUrl, filename) {
