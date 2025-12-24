@@ -39,6 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const scanResult = document.getElementById('scanResult');
     let html5QrcodeScanner = null;
 
+    // Filtro tabla
+    const filterSerieInput = document.getElementById('filterSerieInput');
+
     // --- ARCHIVO ---
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
@@ -129,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
 
-    function renderTable() {
+    function renderTable(filterValue = '') {
         const thead = document.querySelector('#tableMain thead');
         const tbody = document.querySelector('#tableMain tbody');
         thead.innerHTML = '';
@@ -145,7 +148,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         thead.appendChild(headerRow);
 
+        const serieKey = getColumnKey('serie');
+        const normalize = s => String(s || '').trim().toUpperCase();
+        const filterNorm = normalize(filterValue);
+
         globalDataRaw.forEach(row => {
+            // Filtrar por serie si hay filtro
+            if (filterValue && serieKey) {
+                const serieVal = normalize(row[serieKey]);
+                if (!serieVal.includes(filterNorm)) return;
+            }
+
             const tr = document.createElement('tr');
             globalHeaders.forEach(h => {
                 const td = document.createElement('td');
@@ -157,6 +170,11 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.appendChild(tr);
         });
     }
+
+    // Evento filtro
+    filterSerieInput?.addEventListener('input', () => {
+        renderTable(filterSerieInput.value);
+    });
 
     function populateLocations() {
         // Buscar columna que contenga "ubicacion" o "tecnica" o "location"
@@ -211,8 +229,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Filtro en tiempo real mientras escribe la serie
+    let foundExistingIndex = -1; // Para guardar el índice si existe
+    
     regSerieInput.addEventListener('input', () => {
         const searchVal = regSerieInput.value.trim().toUpperCase();
+        foundExistingIndex = -1;
         
         if (searchVal.length < 2) {
             regFeedback.classList.add('hidden');
@@ -228,9 +249,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const exactMatch = globalDataRaw.findIndex(row => normalize(row[serieKey]) === searchVal);
         
         if (exactMatch !== -1) {
+            foundExistingIndex = exactMatch;
             const row = globalDataRaw[exactMatch];
             const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
-            regFeedback.textContent = `⚠️ Serie existe (fila ${exactMatch + 2}) - Ubicación: ${locKey ? row[locKey] : 'N/A'}`;
+            const equipoKey = getColumnKey('equipo');
+            const obsKey = getColumnKey('observacion');
+            
+            // Cargar datos existentes
+            if (locKey && row[locKey]) {
+                // Seleccionar la ubicación existente
+                regLocationSelect.value = row[locKey];
+            }
+            if (obsKey) {
+                regObservaciones.value = row[obsKey] || '';
+            }
+            
+            regFeedback.innerHTML = `⚠️ Serie existe (fila ${exactMatch + 2})<br>Equipo: <strong>${equipoKey ? row[equipoKey] : 'N/A'}</strong><br>Puedes actualizar las observaciones`;
             regFeedback.className = 'feedback warning';
             regFeedback.classList.remove('hidden');
         } else {
@@ -270,23 +304,39 @@ document.addEventListener('DOMContentLoaded', () => {
         const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
         const obsKey = getColumnKey('observacion');
 
+        console.log("Columnas encontradas:", { serieKey, locKey, obsKey });
+        console.log("Headers:", globalHeaders);
+
         if (!serieKey) {
             alert("No se encontró columna 'Serie' en el Excel. Columnas disponibles: " + globalHeaders.join(', '));
             return;
         }
 
-        // Verificar duplicado
+        // Verificar si existe
         const normalize = s => String(s || '').trim().toUpperCase();
-        const exists = globalDataRaw.findIndex(row => normalize(row[serieKey]) === serieVal);
+        const existsIndex = globalDataRaw.findIndex(row => normalize(row[serieKey]) === serieVal);
 
-        if (exists !== -1) {
-            regFeedback.textContent = `⚠️ Serie "${serieVal}" ya existe (fila ${exists + 2})`;
-            regFeedback.className = 'feedback error';
-            regFeedback.classList.remove('hidden');
+        if (existsIndex !== -1) {
+            // EXISTE - Actualizar observaciones
+            if (obsKey) {
+                globalDataRaw[existsIndex][obsKey] = obsVal;
+                renderTable();
+                regFeedback.textContent = `✅ Observaciones actualizadas para serie "${serieVal}"`;
+                regFeedback.className = 'feedback success';
+                regFeedback.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    registerModal.classList.add('hidden');
+                }, 1200);
+            } else {
+                regFeedback.textContent = `⚠️ Serie ya existe y no se encontró columna de observaciones`;
+                regFeedback.className = 'feedback error';
+                regFeedback.classList.remove('hidden');
+            }
             return;
         }
 
-        // Crear nueva fila
+        // NO EXISTE - Crear nueva fila
         const newRow = {};
         globalHeaders.forEach(h => newRow[h] = "");
         newRow[serieKey] = serieVal;
