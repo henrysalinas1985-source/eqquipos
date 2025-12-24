@@ -1,12 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // === INDEXEDDB PARA IMÁGENES ===
+    // === INDEXEDDB PARA IMÁGENES Y EXCEL ===
     let imageDB = null;
     const DB_NAME = 'EquiposImageDB';
+    const DB_VERSION = 2; // Incrementar versión para agregar store
     const STORE_NAME = 'images';
+    const EXCEL_STORE = 'excelData';
 
     function initImageDB() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 1);
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
             request.onerror = () => reject(request.error);
             request.onsuccess = () => {
                 imageDB = request.result;
@@ -17,18 +19,136 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!db.objectStoreNames.contains(STORE_NAME)) {
                     db.createObjectStore(STORE_NAME, { keyPath: 'id' });
                 }
+                if (!db.objectStoreNames.contains(EXCEL_STORE)) {
+                    db.createObjectStore(EXCEL_STORE, { keyPath: 'id' });
+                }
             };
         });
     }
 
-    function saveImageToDB(id, dataUrl) {
+    // === FUNCIONES PARA GUARDAR/CARGAR EXCEL ===
+    async function saveExcelToDB() {
+        if (!imageDB) await initImageDB();
+        
+        const excelData = {
+            id: 'currentExcel',
+            data: globalDataRaw,
+            headers: globalHeaders,
+            sheetName: globalFirstSheetName,
+            savedAt: new Date().toISOString()
+        };
+        
         return new Promise((resolve, reject) => {
-            if (!imageDB) return reject('DB not initialized');
-            const tx = imageDB.transaction(STORE_NAME, 'readwrite');
-            const store = tx.objectStore(STORE_NAME);
-            store.put({ id, dataUrl });
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
+            try {
+                const tx = imageDB.transaction(EXCEL_STORE, 'readwrite');
+                const store = tx.objectStore(EXCEL_STORE);
+                store.put(excelData);
+                tx.oncomplete = () => {
+                    console.log('Excel guardado en IndexedDB');
+                    resolve();
+                };
+                tx.onerror = () => reject(tx.error);
+            } catch (err) {
+                reject(err);
+            }
+        });
+    }
+
+    async function loadExcelFromDB() {
+        if (!imageDB) await initImageDB();
+        
+        return new Promise((resolve) => {
+            try {
+                const tx = imageDB.transaction(EXCEL_STORE, 'readonly');
+                const store = tx.objectStore(EXCEL_STORE);
+                const request = store.get('currentExcel');
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => resolve(null);
+            } catch (err) {
+                resolve(null);
+            }
+        });
+    }
+
+    async function clearExcelFromDB() {
+        if (!imageDB) await initImageDB();
+        
+        return new Promise((resolve, reject) => {
+            try {
+                const tx = imageDB.transaction(EXCEL_STORE, 'readwrite');
+                const store = tx.objectStore(EXCEL_STORE);
+                store.delete('currentExcel');
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            } catch (err) {
+                reject(err);
+            }
+        });
+    }
+
+    // Comprimir imagen antes de guardar
+    function compressImage(dataUrl, maxSize = 100000) {
+        return new Promise((resolve) => {
+            // Si ya es pequeña, retornar
+            if (dataUrl.length < maxSize) {
+                resolve(dataUrl);
+                return;
+            }
+            
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // Reducir tamaño si es muy grande
+                const maxDim = 600;
+                if (width > maxDim || height > maxDim) {
+                    const ratio = Math.min(maxDim / width, maxDim / height);
+                    width = Math.round(width * ratio);
+                    height = Math.round(height * ratio);
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                
+                // Comprimir más agresivamente
+                resolve(canvas.toDataURL('image/jpeg', 0.4));
+            };
+            img.onerror = () => resolve(dataUrl);
+            img.src = dataUrl;
+        });
+    }
+
+    async function saveImageToDB(id, dataUrl) {
+        if (!imageDB) {
+            await initImageDB();
+        }
+        
+        // Comprimir antes de guardar
+        const compressed = await compressImage(dataUrl);
+        
+        return new Promise((resolve, reject) => {
+            try {
+                const tx = imageDB.transaction(STORE_NAME, 'readwrite');
+                const store = tx.objectStore(STORE_NAME);
+                const request = store.put({ id, dataUrl: compressed });
+                
+                request.onsuccess = () => resolve();
+                request.onerror = (e) => {
+                    console.error('Error guardando en IndexedDB:', e);
+                    reject(e.target.error);
+                };
+                
+                tx.onerror = (e) => {
+                    console.error('Error transacción:', e);
+                    reject(tx.error);
+                };
+            } catch (err) {
+                console.error('Error general:', err);
+                reject(err);
+            }
         });
     }
 
@@ -54,8 +174,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Inicializar DB al cargar
-    initImageDB().then(() => console.log('ImageDB lista')).catch(console.error);
+    // Inicializar DB y cargar Excel guardado
+    initImageDB().then(async () => {
+        console.log('ImageDB lista');
+        
+        // Intentar cargar Excel guardado
+        const savedExcel = await loadExcelFromDB();
+        if (savedExcel && savedExcel.data && savedExcel.data.length > 0) {
+            globalDataRaw = savedExcel.data;
+            globalHeaders = savedExcel.headers;
+            globalFirstSheetName = savedExcel.sheetName || 'Sheet1';
+            
+            renderTable();
+            populateLocations();
+            
+            resultsArea.classList.remove('hidden');
+            exportBtn.disabled = false;
+            registerSerieBtn.classList.remove('disabled');
+            clearExcelBtn.classList.remove('hidden');
+            
+            const fecha = new Date(savedExcel.savedAt).toLocaleString('es-ES');
+            fileLabel.textContent = `📂 Datos cargados (guardado: ${fecha})`;
+            fileLabel.style.color = '#00ff88';
+            
+            console.log('Excel cargado desde IndexedDB:', globalDataRaw.length, 'filas');
+        }
+    }).catch(console.error);
 
     // --- BACKUP DE IMÁGENES ---
     const exportImagesBtn = document.getElementById('exportImagesBtn');
@@ -144,6 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadingDiv = document.getElementById('loading');
     const resultsArea = document.getElementById('resultsArea');
     const exportBtn = document.getElementById('exportBtn');
+    const clearExcelBtn = document.getElementById('clearExcelBtn');
 
     // Variables Globales
     let globalDataRaw = [];
@@ -218,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         processBtn.disabled = true;
 
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
                 const data = new Uint8Array(e.target.result);
                 globalWorkbook = XLSX.read(data, { type: 'array', cellDates: true });
@@ -233,11 +378,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 renderTable();
                 populateLocations();
+                
+                // Guardar en IndexedDB automáticamente
+                await saveExcelToDB();
+                fileLabel.textContent = `✅ ${file.name} (guardado)`;
+                fileLabel.style.color = '#00ff88';
 
                 loadingDiv.classList.add('hidden');
                 resultsArea.classList.remove('hidden');
                 exportBtn.disabled = false;
                 registerSerieBtn.classList.remove('disabled');
+                clearExcelBtn.classList.remove('hidden');
 
             } catch (error) {
                 console.error(error);
@@ -247,6 +398,26 @@ document.addEventListener('DOMContentLoaded', () => {
             processBtn.disabled = false;
         };
         reader.readAsArrayBuffer(file);
+    });
+
+    // --- LIMPIAR DATOS GUARDADOS ---
+    clearExcelBtn.addEventListener('click', async () => {
+        if (confirm('¿Borrar datos guardados? Podrás cargar un nuevo archivo.')) {
+            await clearExcelFromDB();
+            globalDataRaw = [];
+            globalHeaders = [];
+            globalFirstSheetName = '';
+            
+            resultsArea.classList.add('hidden');
+            exportBtn.disabled = true;
+            registerSerieBtn.classList.add('disabled');
+            clearExcelBtn.classList.add('hidden');
+            fileLabel.textContent = 'Haz clic para seleccionar archivo';
+            fileLabel.style.color = '#aaa';
+            fileInput.value = '';
+            
+            alert('Datos borrados. Puedes cargar un nuevo archivo.');
+        }
     });
 
     // --- EXPORTAR ---
@@ -394,23 +565,36 @@ document.addEventListener('DOMContentLoaded', () => {
             if (row[col]) {
                 hasImages = true;
                 const imgRef = row[col];
-                const dataUrl = await getImageFromDB(imgRef);
                 
                 const imgContainer = document.createElement('div');
                 imgContainer.style.cssText = 'position:relative; width:calc(50% - 4px);';
                 
-                if (dataUrl) {
-                    imgContainer.innerHTML = `
-                        <img src="${dataUrl}" style="width:100%; height:80px; object-fit:cover; border-radius:8px; border:2px solid #00ff88;">
-                        <small style="color:#888; font-size:0.7rem; display:block; text-align:center; margin-top:2px;">${imgRef}</small>
-                    `;
-                } else {
-                    imgContainer.innerHTML = `
-                        <div style="width:100%; height:80px; background:rgba(255,255,255,0.05); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.75rem;">No encontrada</div>
-                        <small style="color:#888; font-size:0.7rem; display:block; text-align:center; margin-top:2px;">${imgRef}</small>
-                    `;
-                }
+                // Mostrar placeholder mientras carga
+                imgContainer.innerHTML = `
+                    <div style="width:100%; height:80px; background:rgba(255,255,255,0.05); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#00d9ff; font-size:0.75rem;">Cargando...</div>
+                    <small style="color:#888; font-size:0.7rem; display:block; text-align:center; margin-top:2px;">${imgRef}</small>
+                `;
                 editImagesGallery.appendChild(imgContainer);
+                
+                // Cargar imagen de forma asíncrona
+                getImageFromDB(imgRef).then(dataUrl => {
+                    if (dataUrl) {
+                        imgContainer.innerHTML = `
+                            <img src="${dataUrl}" style="width:100%; height:80px; object-fit:cover; border-radius:8px; border:2px solid #00ff88;" loading="lazy">
+                            <small style="color:#888; font-size:0.7rem; display:block; text-align:center; margin-top:2px;">${imgRef}</small>
+                        `;
+                    } else {
+                        imgContainer.innerHTML = `
+                            <div style="width:100%; height:80px; background:rgba(255,255,255,0.05); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.75rem;">No encontrada</div>
+                            <small style="color:#888; font-size:0.7rem; display:block; text-align:center; margin-top:2px;">${imgRef}</small>
+                        `;
+                    }
+                }).catch(() => {
+                    imgContainer.innerHTML = `
+                        <div style="width:100%; height:80px; background:rgba(255,100,100,0.1); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#ff6464; font-size:0.75rem;">Error</div>
+                        <small style="color:#888; font-size:0.7rem; display:block; text-align:center; margin-top:2px;">${imgRef}</small>
+                    `;
+                });
             }
         }
 
@@ -438,6 +622,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Asegurar que no hay otra cámara activa
+        stopEditCamera();
+
         addImageBtn.textContent = '⏳ Abriendo...';
         addImageBtn.disabled = true;
 
@@ -447,12 +634,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             editCameraVideo.srcObject = editCameraStream;
+            await editCameraVideo.play();
             editCameraContainer.classList.remove('hidden');
             addImageBtn.classList.add('hidden');
             captureEditPhotoBtn.classList.remove('hidden');
             cancelEditCameraBtn.classList.remove('hidden');
         } catch (e) {
+            console.error('Error cámara:', e);
             alert('No se pudo acceder a la cámara: ' + e.message);
+            addImageBtn.classList.remove('hidden');
         }
 
         addImageBtn.textContent = '📷 Agregar Foto';
@@ -517,7 +707,10 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`Imagen guardada: ${imgFilename}`);
         } catch (err) {
             console.error('Error guardando imagen:', err);
-            alert('Error al guardar imagen. Intenta de nuevo.');
+            // Aún así descargar la imagen
+            downloadImage(dataUrl, imgFilename);
+            alert('⚠️ No se pudo guardar en el navegador (memoria llena), pero la imagen se descargó a tu dispositivo.');
+            await loadImagesForRow(globalDataRaw[currentMatchIndex]);
         }
     });
 
@@ -908,6 +1101,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         globalDataRaw.push(newRow);
         renderTable();
+        
+        // Guardar en IndexedDB automáticamente
+        saveExcelToDB();
 
         regFeedback.textContent = `✅ Serie "${serieVal}" registrada` + (capturedImageData ? ' (imagen descargada)' : '');
         regFeedback.className = 'feedback success';
@@ -1034,7 +1230,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- ACTUALIZAR FECHA, UBICACIÓN Y OBSERVACIONES ---
-    updateBtn.addEventListener('click', () => {
+    updateBtn.addEventListener('click', async () => {
         if (currentMatchIndex === -1) return;
 
         const newDate = dateInput.value;
@@ -1069,6 +1265,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 globalDataRaw[currentMatchIndex][colName] = textarea.value.trim();
             }
         });
+
+        // Guardar en IndexedDB automáticamente
+        await saveExcelToDB();
 
         alert(`✅ Actualizado (fila ${currentMatchIndex + 2})`);
         editPanel.classList.add('hidden');
