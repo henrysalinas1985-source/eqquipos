@@ -39,9 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const scanResult = document.getElementById('scanResult');
     let html5QrcodeScanner = null;
 
-    // Filtro tabla
-    const filterSerieInput = document.getElementById('filterSerieInput');
-
     // --- ARCHIVO ---
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
@@ -171,9 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Evento filtro
-    filterSerieInput?.addEventListener('input', () => {
-        renderTable(filterSerieInput.value);
+    // Evento filtro de tabla
+    document.getElementById('filterSerieInput').addEventListener('input', function() {
+        renderTable(this.value);
     });
 
     function populateLocations() {
