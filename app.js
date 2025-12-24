@@ -101,7 +101,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- HELPERS ---
     function getColumnKey(name) {
-        return globalHeaders.find(h => h.toLowerCase().includes(name.toLowerCase())) || null;
+        // Normalizar: quitar tildes y convertir a minúsculas
+        const normalize = str => str.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Quita tildes
+        
+        const searchTerm = normalize(name);
+        
+        return globalHeaders.find(h => normalize(h).includes(searchTerm)) || null;
     }
 
     function formatDate(val) {
