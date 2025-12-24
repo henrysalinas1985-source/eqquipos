@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const registerModal = document.getElementById('registerModal');
     const regSerieInput = document.getElementById('regSerieInput');
     const regLocationSelect = document.getElementById('regLocationSelect');
+    const regObservaciones = document.getElementById('regObservaciones');
     const confirmRegBtn = document.getElementById('confirmRegBtn');
     const cancelRegBtn = document.getElementById('cancelRegBtn');
     const regFeedback = document.getElementById('regFeedback');
@@ -197,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         regSerieInput.value = '';
         regLocationSelect.value = '';
+        regObservaciones.value = '';
         regFeedback.classList.add('hidden');
         registerModal.classList.remove('hidden');
         regSerieInput.focus();
@@ -251,6 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
     confirmRegBtn.addEventListener('click', () => {
         const serieVal = regSerieInput.value.trim().toUpperCase();
         const locVal = regLocationSelect.value;
+        const obsVal = regObservaciones.value.trim();
 
         if (!serieVal) {
             alert("Ingresa un número de serie.");
@@ -263,6 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const serieKey = getColumnKey('serie');
         const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
+        const obsKey = getColumnKey('observacion');
 
         if (!serieKey) {
             alert("No se encontró columna 'Serie' en el Excel. Columnas disponibles: " + globalHeaders.join(', '));
@@ -285,6 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         globalHeaders.forEach(h => newRow[h] = "");
         newRow[serieKey] = serieVal;
         if (locKey) newRow[locKey] = locVal;
+        if (obsKey) newRow[obsKey] = obsVal;
 
         const dateKey = getColumnKey('calibracion') || getColumnKey('fecha');
         if (dateKey) newRow[dateKey] = new Date();
@@ -389,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             regSerieInput.value = scannedValue;
             regLocationSelect.value = '';
+            regObservaciones.value = '';
             regFeedback.classList.add('hidden');
             registerModal.classList.remove('hidden');
         }
