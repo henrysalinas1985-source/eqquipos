@@ -43,8 +43,99 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function getAllImagesFromDB() {
+        return new Promise((resolve, reject) => {
+            if (!imageDB) return resolve([]);
+            const tx = imageDB.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => resolve([]);
+        });
+    }
+
     // Inicializar DB al cargar
     initImageDB().then(() => console.log('ImageDB lista')).catch(console.error);
+
+    // --- BACKUP DE IMÁGENES ---
+    const exportImagesBtn = document.getElementById('exportImagesBtn');
+    const importImagesInput = document.getElementById('importImagesInput');
+    const backupStatus = document.getElementById('backupStatus');
+
+    function showBackupStatus(msg, isError = false) {
+        backupStatus.textContent = msg;
+        backupStatus.style.color = isError ? '#ff6464' : '#00ff88';
+        backupStatus.classList.remove('hidden');
+        setTimeout(() => backupStatus.classList.add('hidden'), 4000);
+    }
+
+    exportImagesBtn.addEventListener('click', async () => {
+        try {
+            exportImagesBtn.disabled = true;
+            exportImagesBtn.textContent = '⏳ Exportando...';
+            
+            const images = await getAllImagesFromDB();
+            
+            if (images.length === 0) {
+                showBackupStatus('No hay imágenes para exportar', true);
+                return;
+            }
+
+            const zip = new JSZip();
+            
+            images.forEach(img => {
+                // Convertir dataUrl a blob
+                const base64 = img.dataUrl.split(',')[1];
+                zip.file(img.id, base64, { base64: true });
+            });
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            
+            // Descargar
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = `backup_imagenes_${new Date().toISOString().slice(0,10)}.zip`;
+            link.click();
+            
+            showBackupStatus(`✅ ${images.length} imágenes exportadas`);
+            
+        } catch (err) {
+            console.error(err);
+            showBackupStatus('Error al exportar', true);
+        } finally {
+            exportImagesBtn.disabled = false;
+            exportImagesBtn.textContent = '⬇️ Exportar Imágenes';
+        }
+    });
+
+    importImagesInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            showBackupStatus('⏳ Importando...');
+            
+            const zip = await JSZip.loadAsync(file);
+            let count = 0;
+
+            for (const [filename, zipEntry] of Object.entries(zip.files)) {
+                if (!zipEntry.dir) {
+                    const base64 = await zipEntry.async('base64');
+                    const dataUrl = `data:image/jpeg;base64,${base64}`;
+                    await saveImageToDB(filename, dataUrl);
+                    count++;
+                }
+            }
+
+            showBackupStatus(`✅ ${count} imágenes importadas`);
+            
+        } catch (err) {
+            console.error(err);
+            showBackupStatus('Error al importar', true);
+        }
+        
+        importImagesInput.value = '';
+    });
 
     // Elementos principales
     const fileInput = document.getElementById('fileInput');

@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -392,6 +393,19 @@
                 <button id="exportBtn" class="btn btn-success" disabled>💾 Exportar Excel</button>
             </div>
             <div id="loading" class="loading hidden">Procesando...</div>
+            
+            <!-- Backup de imágenes -->
+            <div style="margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.1);">
+                <label style="color:#888; font-size:0.85rem; margin-bottom:8px; display:block;">📷 Backup de Imágenes</label>
+                <div class="btn-row">
+                    <button id="exportImagesBtn" class="btn btn-secondary" style="flex:1; font-size:0.85rem;">⬇️ Exportar Imágenes</button>
+                    <label class="btn btn-secondary" style="flex:1; font-size:0.85rem; cursor:pointer; text-align:center;">
+                        ⬆️ Importar Imágenes
+                        <input type="file" id="importImagesInput" accept=".zip" style="display:none;">
+                    </label>
+                </div>
+                <div id="backupStatus" class="hidden" style="margin-top:8px; font-size:0.8rem; text-align:center;"></div>
+            </div>
         </div>
 
         <!-- Acciones -->
