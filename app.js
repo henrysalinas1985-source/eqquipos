@@ -300,6 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const editPanel = document.getElementById('editPanel');
     const matchInfo = document.getElementById('matchInfo');
     const equipoNombre = document.getElementById('equipoNombre');
+    const editSerieInput = document.getElementById('editSerieInput');
     const editLocationSelect = document.getElementById('editLocationSelect');
     const dateInput = document.getElementById('dateInput');
     const editObservaciones = document.getElementById('editObservaciones');
@@ -516,9 +517,16 @@ document.addEventListener('DOMContentLoaded', () => {
         scanResult.className = 'feedback success';
         scanResult.classList.remove('hidden');
 
-        matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? row[serieKey] : 'N/A'}`;
+        matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? (row[serieKey] || 'Sin serie') : 'N/A'}`;
         
         equipoNombre.textContent = equipoKey ? (row[equipoKey] || 'Sin nombre') : 'N/A';
+        
+        // Cargar serie actual
+        if (serieKey) {
+            editSerieInput.value = row[serieKey] || '';
+        } else {
+            editSerieInput.value = '';
+        }
         
         // Cargar todas las observaciones
         loadObservacionesForRow(row);
@@ -1188,10 +1196,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const equipoKey = getColumnKey('equipo');
             const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
 
-            matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? row[serieKey] : 'N/A'}`;
+            matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? (row[serieKey] || 'Sin serie') : 'N/A'}`;
             
             // Mostrar nombre del equipo
             equipoNombre.textContent = equipoKey ? (row[equipoKey] || 'Sin nombre') : 'N/A';
+            
+            // Cargar serie actual
+            if (serieKey) {
+                editSerieInput.value = row[serieKey] || '';
+            } else {
+                editSerieInput.value = '';
+            }
             
             // Cargar todas las observaciones
             loadObservacionesForRow(row);
@@ -1229,15 +1244,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ACTUALIZAR FECHA, UBICACIÓN Y OBSERVACIONES ---
+    // --- ACTUALIZAR FECHA, UBICACIÓN, SERIE Y OBSERVACIONES ---
     updateBtn.addEventListener('click', async () => {
         if (currentMatchIndex === -1) return;
 
         const newDate = dateInput.value;
         const newLoc = editLocationSelect.value;
+        const newSerie = editSerieInput.value.trim().toUpperCase();
 
         const targetKey = dateInput.dataset.targetKey;
         const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
+        const serieKey = getColumnKey('serie');
+
+        // Guardar serie
+        if (serieKey && newSerie) {
+            globalDataRaw[currentMatchIndex][serieKey] = newSerie;
+        }
 
         if (targetKey && newDate) {
             const [y, m, d] = newDate.split('-').map(Number);
