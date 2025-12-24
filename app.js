@@ -33,6 +33,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelRegBtn = document.getElementById('cancelRegBtn');
     const regFeedback = document.getElementById('regFeedback');
 
+    // Elementos de cámara para registro
+    const cameraContainer = document.getElementById('cameraContainer');
+    const cameraVideo = document.getElementById('cameraVideo');
+    const capturedImage = document.getElementById('capturedImage');
+    const startCameraBtn = document.getElementById('startCameraBtn');
+    const capturePhotoBtn = document.getElementById('capturePhotoBtn');
+    const retakePhotoBtn = document.getElementById('retakePhotoBtn');
+    let cameraStream = null;
+    let capturedImageData = null;
+
     // QR Elements
     const startScanBtn = document.getElementById('startScanBtn');
     const stopScanBtn = document.getElementById('stopScanBtn');
@@ -254,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("Primero carga un archivo Excel.");
             return;
         }
+        resetCameraUI();
         regSerieInput.value = '';
         regLocationSelect.value = '';
         regObservaciones.value = '';
@@ -263,8 +274,80 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     cancelRegBtn.addEventListener('click', () => {
+        stopCamera();
         registerModal.classList.add('hidden');
     });
+
+    // --- CÁMARA PARA FOTO ---
+    function resetCameraUI() {
+        stopCamera();
+        cameraContainer.classList.add('hidden');
+        capturedImage.classList.add('hidden');
+        startCameraBtn.classList.remove('hidden');
+        capturePhotoBtn.classList.add('hidden');
+        retakePhotoBtn.classList.add('hidden');
+        capturedImageData = null;
+    }
+
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+    }
+
+    startCameraBtn.addEventListener('click', async () => {
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { exact: "environment" } }
+            });
+        } catch (e) {
+            // Fallback si no hay cámara trasera
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }
+                });
+            } catch (e2) {
+                alert("No se pudo acceder a la cámara");
+                return;
+            }
+        }
+        
+        cameraVideo.srcObject = cameraStream;
+        cameraContainer.classList.remove('hidden');
+        startCameraBtn.classList.add('hidden');
+        capturePhotoBtn.classList.remove('hidden');
+    });
+
+    capturePhotoBtn.addEventListener('click', () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = cameraVideo.videoWidth;
+        canvas.height = cameraVideo.videoHeight;
+        canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
+        
+        capturedImageData = canvas.toDataURL('image/jpeg', 0.8);
+        capturedImage.src = capturedImageData;
+        
+        stopCamera();
+        cameraContainer.classList.add('hidden');
+        capturedImage.classList.remove('hidden');
+        capturePhotoBtn.classList.add('hidden');
+        retakePhotoBtn.classList.remove('hidden');
+    });
+
+    retakePhotoBtn.addEventListener('click', () => {
+        capturedImage.classList.add('hidden');
+        retakePhotoBtn.classList.add('hidden');
+        capturedImageData = null;
+        startCameraBtn.click(); // Reabrir cámara
+    });
+
+    function downloadImage(dataUrl, filename) {
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = filename;
+        link.click();
+    }
 
     // Filtro en tiempo real mientras escribe la serie
     let foundExistingIndex = -1; // Para guardar el índice si existe
@@ -355,22 +438,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const existsIndex = globalDataRaw.findIndex(row => normalize(row[serieKey]) === serieVal);
 
         if (existsIndex !== -1) {
-            // EXISTE - Actualizar observaciones
+            // EXISTE - Actualizar observaciones e imagen
             if (obsKey) {
                 globalDataRaw[existsIndex][obsKey] = obsVal;
-                renderTable();
-                regFeedback.textContent = `✅ Observaciones actualizadas para serie "${serieVal}"`;
-                regFeedback.className = 'feedback success';
-                regFeedback.classList.remove('hidden');
-                
-                setTimeout(() => {
-                    registerModal.classList.add('hidden');
-                }, 1200);
-            } else {
-                regFeedback.textContent = `⚠️ Serie ya existe y no se encontró columna de observaciones`;
-                regFeedback.className = 'feedback error';
-                regFeedback.classList.remove('hidden');
             }
+            
+            // Si hay imagen nueva, descargarla y actualizar referencia
+            const imgKey = getColumnKey('imagen') || getColumnKey('foto');
+            if (capturedImageData) {
+                const imgFilename = `${serieVal.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
+                if (imgKey) globalDataRaw[existsIndex][imgKey] = imgFilename;
+                downloadImage(capturedImageData, imgFilename);
+            }
+            
+            renderTable();
+            regFeedback.textContent = `✅ Actualizado para serie "${serieVal}"` + (capturedImageData ? ' (imagen descargada)' : '');
+            regFeedback.className = 'feedback success';
+            regFeedback.classList.remove('hidden');
+            
+            setTimeout(() => {
+                resetCameraUI();
+                registerModal.classList.add('hidden');
+            }, 1500);
             return;
         }
 
@@ -384,16 +473,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateKey = getColumnKey('calibracion') || getColumnKey('fecha');
         if (dateKey) newRow[dateKey] = new Date();
 
+        // Guardar referencia de imagen si se capturó
+        const imgKey = getColumnKey('imagen') || getColumnKey('foto');
+        if (capturedImageData) {
+            const imgFilename = `${serieVal.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
+            if (imgKey) newRow[imgKey] = imgFilename;
+            downloadImage(capturedImageData, imgFilename);
+        }
+
         globalDataRaw.push(newRow);
         renderTable();
 
-        regFeedback.textContent = `✅ Serie "${serieVal}" registrada`;
+        regFeedback.textContent = `✅ Serie "${serieVal}" registrada` + (capturedImageData ? ' (imagen descargada)' : '');
         regFeedback.className = 'feedback success';
         regFeedback.classList.remove('hidden');
 
         setTimeout(() => {
+            resetCameraUI();
             registerModal.classList.add('hidden');
-        }, 1200);
+        }, 1500);
     });
 
     // --- QR ---
@@ -501,6 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
             scanResult.className = 'feedback warning';
             scanResult.classList.remove('hidden');
 
+            resetCameraUI();
             regSerieInput.value = scannedValue;
             regLocationSelect.value = '';
             regObservaciones.value = '';

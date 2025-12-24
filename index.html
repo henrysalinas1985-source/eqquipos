@@ -351,8 +351,23 @@
                 <textarea id="regObservaciones" placeholder="Escribe observaciones..." rows="3" 
                     style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none;"></textarea>
             </div>
+            
+            <!-- Captura de imagen -->
+            <div class="input-group">
+                <label>📷 Foto del Equipo</label>
+                <div id="cameraContainer" class="hidden" style="margin-bottom:10px;">
+                    <video id="cameraVideo" autoplay playsinline style="width:100%; border-radius:10px; border:2px solid #00d9ff;"></video>
+                </div>
+                <img id="capturedImage" class="hidden" style="width:100%; border-radius:10px; border:2px solid #00ff88; margin-bottom:10px;">
+                <div style="display:flex; gap:10px;">
+                    <button type="button" id="startCameraBtn" class="btn btn-secondary" style="flex:1;">📷 Abrir Cámara</button>
+                    <button type="button" id="capturePhotoBtn" class="btn btn-primary hidden" style="flex:1;">📸 Capturar</button>
+                    <button type="button" id="retakePhotoBtn" class="btn btn-secondary hidden" style="flex:1;">🔄 Otra Foto</button>
+                </div>
+            </div>
+            
             <div id="regFeedback" class="feedback hidden"></div>
-            <div class="btn-row">
+            <div class="btn-row" style="margin-top:16px;">
                 <button id="confirmRegBtn" class="btn btn-success" style="flex:1;">Guardar</button>
                 <button id="cancelRegBtn" class="btn btn-secondary" style="flex:1;">Cancelar</button>
             </div>
