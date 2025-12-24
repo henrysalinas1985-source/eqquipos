@@ -1,4 +1,51 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // === INDEXEDDB PARA IMÁGENES ===
+    let imageDB = null;
+    const DB_NAME = 'EquiposImageDB';
+    const STORE_NAME = 'images';
+
+    function initImageDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                imageDB = request.result;
+                resolve(imageDB);
+            };
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                }
+            };
+        });
+    }
+
+    function saveImageToDB(id, dataUrl) {
+        return new Promise((resolve, reject) => {
+            if (!imageDB) return reject('DB not initialized');
+            const tx = imageDB.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.put({ id, dataUrl });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
+    function getImageFromDB(id) {
+        return new Promise((resolve, reject) => {
+            if (!imageDB) return resolve(null);
+            const tx = imageDB.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.get(id);
+            request.onsuccess = () => resolve(request.result?.dataUrl || null);
+            request.onerror = () => resolve(null);
+        });
+    }
+
+    // Inicializar DB al cargar
+    initImageDB().then(() => console.log('ImageDB lista')).catch(console.error);
+
     // Elementos principales
     const fileInput = document.getElementById('fileInput');
     const fileLabel = document.getElementById('fileLabel');
@@ -223,12 +270,21 @@ document.addEventListener('DOMContentLoaded', () => {
         editImageInput.value = '';
         if (imgKey && row[imgKey]) {
             currentImageRef = row[imgKey];
-            editImageName.textContent = row[imgKey] + ' (selecciona el archivo para ver)';
+            editImageName.textContent = row[imgKey];
             editImageContainer.classList.remove('hidden');
-            editImagePreview.src = '';
-            editImagePreview.style.display = 'none';
             noImageMsg.classList.add('hidden');
-            loadImageBtn.textContent = '📂 Cargar/Ver Imagen: ' + row[imgKey];
+            loadImageBtn.textContent = '📂 Cambiar Imagen';
+            
+            // Cargar imagen desde IndexedDB
+            getImageFromDB(row[imgKey]).then(dataUrl => {
+                if (dataUrl) {
+                    editImagePreview.src = dataUrl;
+                    editImagePreview.style.display = 'block';
+                } else {
+                    editImagePreview.style.display = 'none';
+                    editImageName.textContent = row[imgKey] + ' (no encontrada en este dispositivo)';
+                }
+            });
         } else {
             editImageContainer.classList.add('hidden');
             editImagePreview.style.display = 'block';
@@ -260,14 +316,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     editImageInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) {
+        if (file && currentMatchIndex !== -1) {
             const reader = new FileReader();
             reader.onload = (ev) => {
-                editImagePreview.src = ev.target.result;
+                const dataUrl = ev.target.result;
+                editImagePreview.src = dataUrl;
+                editImagePreview.style.display = 'block';
                 editImageName.textContent = file.name;
                 editImageContainer.classList.remove('hidden');
                 noImageMsg.classList.add('hidden');
-                currentImageRef = file.name;
+                
+                // Guardar en IndexedDB y actualizar referencia
+                const serieKey = getColumnKey('serie');
+                const imgKey = getColumnKey('imagen') || getColumnKey('foto');
+                const row = globalDataRaw[currentMatchIndex];
+                const serieVal = serieKey ? row[serieKey] : `equipo_${currentMatchIndex}`;
+                const imgFilename = `${String(serieVal).replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
+                
+                if (imgKey) {
+                    globalDataRaw[currentMatchIndex][imgKey] = imgFilename;
+                }
+                
+                saveImageToDB(imgFilename, dataUrl)
+                    .then(() => {
+                        console.log('Imagen cargada y guardada:', imgFilename);
+                        currentImageRef = imgFilename;
+                        editImageName.textContent = imgFilename;
+                    })
+                    .catch(console.error);
             };
             reader.readAsDataURL(file);
         }
@@ -509,6 +585,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (capturedImageData) {
                 const imgFilename = `${serieVal.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
                 if (imgKey) globalDataRaw[existsIndex][imgKey] = imgFilename;
+                
+                // Guardar en IndexedDB
+                saveImageToDB(imgFilename, capturedImageData)
+                    .then(() => console.log('Imagen actualizada en DB:', imgFilename))
+                    .catch(console.error);
+                
                 downloadImage(capturedImageData, imgFilename);
             }
             
@@ -539,6 +621,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (capturedImageData) {
             const imgFilename = `${serieVal.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
             if (imgKey) newRow[imgKey] = imgFilename;
+            
+            // Guardar en IndexedDB
+            saveImageToDB(imgFilename, capturedImageData)
+                .then(() => console.log('Imagen guardada en DB:', imgFilename))
+                .catch(console.error);
+            
+            // También descargar
             downloadImage(capturedImageData, imgFilename);
         }
 
@@ -652,12 +741,21 @@ document.addEventListener('DOMContentLoaded', () => {
             editImageInput.value = '';
             if (imgKey && row[imgKey]) {
                 currentImageRef = row[imgKey];
-                editImageName.textContent = row[imgKey] + ' (selecciona el archivo para ver)';
+                editImageName.textContent = row[imgKey];
                 editImageContainer.classList.remove('hidden');
-                editImagePreview.src = '';
-                editImagePreview.style.display = 'none';
                 noImageMsg.classList.add('hidden');
-                loadImageBtn.textContent = '📂 Cargar/Ver Imagen: ' + row[imgKey];
+                loadImageBtn.textContent = '📂 Cambiar Imagen';
+                
+                // Cargar imagen desde IndexedDB
+                getImageFromDB(row[imgKey]).then(dataUrl => {
+                    if (dataUrl) {
+                        editImagePreview.src = dataUrl;
+                        editImagePreview.style.display = 'block';
+                    } else {
+                        editImagePreview.style.display = 'none';
+                        editImageName.textContent = row[imgKey] + ' (no encontrada en este dispositivo)';
+                    }
+                });
             } else {
                 editImageContainer.classList.add('hidden');
                 editImagePreview.style.display = 'block';
