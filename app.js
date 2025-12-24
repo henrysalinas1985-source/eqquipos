@@ -21,7 +21,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateInput = document.getElementById('dateInput');
     const editObservaciones = document.getElementById('editObservaciones');
     const updateBtn = document.getElementById('updateBtn');
+    const editImageContainer = document.getElementById('editImageContainer');
+    const editImagePreview = document.getElementById('editImagePreview');
+    const editImageName = document.getElementById('editImageName');
+    const noImageMsg = document.getElementById('noImageMsg');
+    const editImageInput = document.getElementById('editImageInput');
+    const loadImageBtn = document.getElementById('loadImageBtn');
     let currentMatchIndex = -1;
+    let currentImageRef = null;
 
     // Elementos de Registro
     const registerSerieBtn = document.getElementById('registerSerieBtn');
@@ -193,6 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const equipoKey = getColumnKey('equipo');
         const obsKey = getColumnKey('observacion');
         const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
+        const imgKey = getColumnKey('imagen') || getColumnKey('foto');
 
         scanResult.textContent = `📝 Editando fila ${index + 2}`;
         scanResult.className = 'feedback success';
@@ -210,6 +218,24 @@ document.addEventListener('DOMContentLoaded', () => {
             editLocationSelect.value = '';
         }
         
+        // Mostrar referencia de imagen si existe
+        currentImageRef = null;
+        editImageInput.value = '';
+        if (imgKey && row[imgKey]) {
+            currentImageRef = row[imgKey];
+            editImageName.textContent = row[imgKey] + ' (selecciona el archivo para ver)';
+            editImageContainer.classList.remove('hidden');
+            editImagePreview.src = '';
+            editImagePreview.style.display = 'none';
+            noImageMsg.classList.add('hidden');
+            loadImageBtn.textContent = '📂 Cargar/Ver Imagen: ' + row[imgKey];
+        } else {
+            editImageContainer.classList.add('hidden');
+            editImagePreview.style.display = 'block';
+            noImageMsg.classList.remove('hidden');
+            loadImageBtn.textContent = '📂 Cargar Imagen';
+        }
+        
         const dateKey = getColumnKey('calibracion') || getColumnKey('fecha');
         if (dateKey) {
             dateInput.value = formatDateForInput(row[dateKey]);
@@ -225,6 +251,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Evento filtro de tabla
     document.getElementById('filterSerieInput').addEventListener('input', function() {
         renderTable(this.value);
+    });
+
+    // --- CARGAR IMAGEN EN EDICIÓN ---
+    loadImageBtn.addEventListener('click', () => {
+        editImageInput.click();
+    });
+
+    editImageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                editImagePreview.src = ev.target.result;
+                editImageName.textContent = file.name;
+                editImageContainer.classList.remove('hidden');
+                noImageMsg.classList.add('hidden');
+                currentImageRef = file.name;
+            };
+            reader.readAsDataURL(file);
+        }
     });
 
     function populateLocations() {
@@ -584,6 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const equipoKey = getColumnKey('equipo');
             const obsKey = getColumnKey('observacion');
             const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
+            const imgKey = getColumnKey('imagen') || getColumnKey('foto');
 
             matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? row[serieKey] : 'N/A'}`;
             
@@ -598,6 +645,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 editLocationSelect.value = row[locKey];
             } else {
                 editLocationSelect.value = '';
+            }
+            
+            // Mostrar referencia de imagen si existe
+            currentImageRef = null;
+            editImageInput.value = '';
+            if (imgKey && row[imgKey]) {
+                currentImageRef = row[imgKey];
+                editImageName.textContent = row[imgKey] + ' (selecciona el archivo para ver)';
+                editImageContainer.classList.remove('hidden');
+                editImagePreview.src = '';
+                editImagePreview.style.display = 'none';
+                noImageMsg.classList.add('hidden');
+                loadImageBtn.textContent = '📂 Cargar/Ver Imagen: ' + row[imgKey];
+            } else {
+                editImageContainer.classList.add('hidden');
+                editImagePreview.style.display = 'block';
+                noImageMsg.classList.remove('hidden');
+                loadImageBtn.textContent = '📂 Cargar Imagen';
             }
             
             const dateKey = getColumnKey('calibracion') || getColumnKey('fecha');

@@ -420,6 +420,21 @@
                     <div style="color: #888; font-size: 0.8rem; margin-bottom: 4px;">EQUIPO</div>
                     <div id="equipoNombre" style="color: #00ff88; font-size: 1.4rem; font-weight: 700;"></div>
                 </div>
+                
+                <!-- Visualizar/Cargar imagen -->
+                <div class="input-group">
+                    <label>📷 Foto del Equipo</label>
+                    <div id="editImageContainer" class="hidden" style="margin-bottom:10px; text-align:center;">
+                        <img id="editImagePreview" style="max-width:100%; max-height:200px; border-radius:10px; border:2px solid #00ff88;">
+                        <p id="editImageName" style="color:#888; font-size:0.8rem; margin-top:5px;"></p>
+                    </div>
+                    <div id="noImageMsg" class="hidden" style="padding:20px; background:rgba(255,255,255,0.05); border-radius:10px; text-align:center; color:#888; margin-bottom:10px;">
+                        Sin imagen registrada
+                    </div>
+                    <input type="file" id="editImageInput" accept="image/*" style="display:none;">
+                    <button type="button" id="loadImageBtn" class="btn btn-secondary" style="width:100%; padding:10px; font-size:0.9rem;">📂 Cargar Imagen</button>
+                </div>
+                
                 <div class="input-group">
                     <label>Ubicación Técnica</label>
                     <select id="editLocationSelect">
