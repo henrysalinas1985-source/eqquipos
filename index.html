@@ -447,8 +447,11 @@
                 </div>
                 <div class="input-group">
                     <label>Observaciones</label>
-                    <textarea id="editObservaciones" placeholder="Escribe observaciones..." rows="3" 
-                        style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none;"></textarea>
+                    <div id="observacionesContainer">
+                        <textarea id="editObservaciones" placeholder="Escribe observaciones..." rows="2" 
+                            style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; margin-bottom:8px;"></textarea>
+                    </div>
+                    <button type="button" id="addObsBtn" class="btn btn-secondary" style="width:100%; padding:8px; font-size:0.85rem; margin-top:4px;">➕ Agregar Nueva Observación</button>
                 </div>
                 <button id="updateBtn" class="btn btn-primary" style="width:100%;">Actualizar</button>
             </div>

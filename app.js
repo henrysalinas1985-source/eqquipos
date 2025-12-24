@@ -67,6 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const editLocationSelect = document.getElementById('editLocationSelect');
     const dateInput = document.getElementById('dateInput');
     const editObservaciones = document.getElementById('editObservaciones');
+    const observacionesContainer = document.getElementById('observacionesContainer');
+    const addObsBtn = document.getElementById('addObsBtn');
     const updateBtn = document.getElementById('updateBtn');
     const editImageContainer = document.getElementById('editImageContainer');
     const editImagePreview = document.getElementById('editImagePreview');
@@ -256,7 +258,9 @@ document.addEventListener('DOMContentLoaded', () => {
         matchInfo.innerHTML = `<strong>ID:</strong> ${row[idKey] || 'N/A'} | <strong>Serie:</strong> ${serieKey ? row[serieKey] : 'N/A'}`;
         
         equipoNombre.textContent = equipoKey ? (row[equipoKey] || 'Sin nombre') : 'N/A';
-        editObservaciones.value = obsKey ? (row[obsKey] || '') : '';
+        
+        // Cargar todas las observaciones
+        loadObservacionesForRow(row);
         
         // Cargar ubicación actual
         if (locKey && row[locKey]) {
@@ -312,6 +316,85 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- CARGAR IMAGEN EN EDICIÓN ---
     loadImageBtn.addEventListener('click', () => {
         editImageInput.click();
+    });
+
+    // --- MÚLTIPLES OBSERVACIONES ---
+    let obsFieldCount = 1;
+
+    function getObsColumns() {
+        // Buscar todas las columnas que contengan "observacion"
+        const normalize = str => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return globalHeaders.filter(h => normalize(h).includes('observacion'));
+    }
+
+    function resetObservacionesUI() {
+        // Limpiar campos adicionales
+        observacionesContainer.innerHTML = `
+            <textarea id="editObservaciones" placeholder="Observación principal..." rows="2" 
+                style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; margin-bottom:8px;"></textarea>
+        `;
+        obsFieldCount = 1;
+    }
+
+    function loadObservacionesForRow(row) {
+        resetObservacionesUI();
+        const obsCols = getObsColumns();
+        
+        // Cargar primera observación
+        const mainTextarea = document.getElementById('editObservaciones');
+        if (obsCols.length > 0 && row[obsCols[0]]) {
+            mainTextarea.value = row[obsCols[0]] || '';
+        } else {
+            mainTextarea.value = '';
+        }
+
+        // Cargar observaciones adicionales existentes
+        for (let i = 1; i < obsCols.length; i++) {
+            if (row[obsCols[i]]) {
+                addObservacionField(obsCols[i], row[obsCols[i]]);
+            }
+        }
+    }
+
+    function addObservacionField(colName = null, value = '') {
+        obsFieldCount++;
+        const fieldId = `editObs_${obsFieldCount}`;
+        const label = colName || `Observaciones ${obsFieldCount}`;
+        
+        const div = document.createElement('div');
+        div.style.marginBottom = '8px';
+        div.innerHTML = `
+            <small style="color:#888; font-size:0.75rem;">${label}</small>
+            <textarea id="${fieldId}" data-colname="${colName || ''}" placeholder="Nueva observación..." rows="2" 
+                style="width:100%; padding:12px; border:1px solid rgba(0,217,255,0.3); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:0.95rem; resize:vertical; outline:none;">${value}</textarea>
+        `;
+        observacionesContainer.appendChild(div);
+        return fieldId;
+    }
+
+    addObsBtn.addEventListener('click', () => {
+        if (currentMatchIndex === -1) {
+            alert('Primero selecciona un equipo');
+            return;
+        }
+
+        // Crear nueva columna de observaciones si no existe
+        const obsCols = getObsColumns();
+        const newColName = `Observaciones ${obsCols.length + 1}`;
+        
+        // Agregar columna a headers si no existe
+        if (!globalHeaders.includes(newColName)) {
+            globalHeaders.push(newColName);
+            // Agregar columna vacía a todos los registros
+            globalDataRaw.forEach(row => {
+                if (!(newColName in row)) row[newColName] = '';
+            });
+        }
+
+        addObservacionField(newColName, '');
+        
+        // Scroll al nuevo campo
+        observacionesContainer.lastChild.scrollIntoView({ behavior: 'smooth' });
     });
 
     editImageInput.addEventListener('change', (e) => {
@@ -726,8 +809,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Mostrar nombre del equipo
             equipoNombre.textContent = equipoKey ? (row[equipoKey] || 'Sin nombre') : 'N/A';
             
-            // Cargar observaciones existentes
-            editObservaciones.value = obsKey ? (row[obsKey] || '') : '';
+            // Cargar todas las observaciones
+            loadObservacionesForRow(row);
             
             // Cargar ubicación actual
             if (locKey && row[locKey]) {
@@ -791,11 +874,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMatchIndex === -1) return;
 
         const newDate = dateInput.value;
-        const newObs = editObservaciones.value.trim();
         const newLoc = editLocationSelect.value;
 
         const targetKey = dateInput.dataset.targetKey;
-        const obsKey = getColumnKey('observacion');
         const locKey = getColumnKey('ubicacion') || getColumnKey('tecnica');
 
         if (targetKey && newDate) {
@@ -803,13 +884,27 @@ document.addEventListener('DOMContentLoaded', () => {
             globalDataRaw[currentMatchIndex][targetKey] = new Date(y, m - 1, d);
         }
 
-        if (obsKey) {
-            globalDataRaw[currentMatchIndex][obsKey] = newObs;
-        }
-
         if (locKey && newLoc) {
             globalDataRaw[currentMatchIndex][locKey] = newLoc;
         }
+
+        // Guardar todas las observaciones
+        const obsCols = getObsColumns();
+        
+        // Primera observación
+        const mainObs = document.getElementById('editObservaciones');
+        if (mainObs && obsCols.length > 0) {
+            globalDataRaw[currentMatchIndex][obsCols[0]] = mainObs.value.trim();
+        }
+
+        // Observaciones adicionales
+        const additionalTextareas = observacionesContainer.querySelectorAll('textarea[id^="editObs_"]');
+        additionalTextareas.forEach(textarea => {
+            const colName = textarea.dataset.colname;
+            if (colName && globalHeaders.includes(colName)) {
+                globalDataRaw[currentMatchIndex][colName] = textarea.value.trim();
+            }
+        });
 
         alert(`✅ Actualizado (fila ${currentMatchIndex + 2})`);
         editPanel.classList.add('hidden');
