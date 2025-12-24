@@ -378,9 +378,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Crear nueva columna de observaciones si no existe
+        // Contar columnas de observaciones existentes
         const obsCols = getObsColumns();
-        const newColName = `Observaciones ${obsCols.length + 1}`;
+        let maxNum = 1;
+        
+        // Buscar el número más alto existente
+        obsCols.forEach(col => {
+            const match = col.match(/(\d+)$/);
+            if (match) {
+                const num = parseInt(match[1]);
+                if (num > maxNum) maxNum = num;
+            }
+        });
+        
+        const newColName = `Observaciones ${maxNum + 1}`;
         
         // Agregar columna a headers si no existe
         if (!globalHeaders.includes(newColName)) {
