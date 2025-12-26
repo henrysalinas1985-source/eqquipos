@@ -1189,7 +1189,19 @@ document.addEventListener('DOMContentLoaded', () => {
             currentMatchIndex = index;
             const row = globalDataRaw[index];
 
-            scanResult.textContent = `✅ Encontrado en fila ${index + 2}`;
+            // Marcar como verificado
+            const verifiedCol = 'Verificado';
+            if (!globalHeaders.includes(verifiedCol)) {
+                globalHeaders.push(verifiedCol);
+                globalDataRaw.forEach(r => { if (!(verifiedCol in r)) r[verifiedCol] = ''; });
+            }
+            globalDataRaw[index][verifiedCol] = '✅';
+            
+            // Guardar y actualizar tabla
+            saveExcelToDB();
+            renderTable();
+
+            scanResult.textContent = `✅ Encontrado en fila ${index + 2} - VERIFICADO`;
             scanResult.className = 'feedback success';
             scanResult.classList.remove('hidden');
 
