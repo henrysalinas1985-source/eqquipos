@@ -941,6 +941,64 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- AUTOCOMPLETE PARA VERIFICACIÓN ---
+    const verifySuggestions = document.getElementById('verifySuggestions');
+
+    verifySerieInput.addEventListener('input', () => {
+        const searchVal = verifySerieInput.value.trim().toUpperCase();
+        verifySuggestions.innerHTML = '';
+        
+        if (searchVal.length < 2) {
+            verifySuggestions.classList.add('hidden');
+            return;
+        }
+
+        const serieKey = getColumnKey('serie');
+        const idKey = globalHeaders[0];
+        const equipoKey = getColumnKey('equipo');
+        const normalize = s => String(s || '').trim().toUpperCase();
+
+        // Buscar coincidencias
+        const matches = globalDataRaw.filter(row => {
+            const serieVal = normalize(row[serieKey]);
+            const idVal = normalize(row[idKey]);
+            return serieVal.includes(searchVal) || idVal.includes(searchVal);
+        }).slice(0, 10); // Limitar a 10 sugerencias
+
+        if (matches.length > 0) {
+            matches.forEach(row => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                const sVal = row[serieKey] || 'Sin serie';
+                const iVal = row[idKey] || 'N/A';
+                const eVal = row[equipoKey] || 'Sin nombre';
+                
+                div.innerHTML = `
+                    <strong>${sVal}</strong>
+                    <small>${eVal} | ID: ${iVal}</small>
+                `;
+                
+                div.addEventListener('click', () => {
+                    verifySerieInput.value = sVal !== 'Sin serie' ? sVal : iVal;
+                    verifySuggestions.classList.add('hidden');
+                    confirmVerifyBtn.click();
+                });
+                
+                verifySuggestions.appendChild(div);
+            });
+            verifySuggestions.classList.remove('hidden');
+        } else {
+            verifySuggestions.classList.add('hidden');
+        }
+    });
+
+    // Cerrar sugerencias al hacer clic fuera
+    document.addEventListener('click', (e) => {
+        if (!verifySerieInput.contains(e.target) && !verifySuggestions.contains(e.target)) {
+            verifySuggestions.classList.add('hidden');
+        }
+    });
+
     // --- CÁMARA PARA FOTO ---
     function resetCameraUI() {
         stopCamera();
