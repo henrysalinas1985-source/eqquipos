@@ -191,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
             resultsArea.classList.remove('hidden');
             exportBtn.disabled = false;
             registerSerieBtn.classList.remove('disabled');
+            verifySerieBtn.classList.remove('disabled');
             clearExcelBtn.classList.remove('hidden');
 
             const fecha = new Date(savedExcel.savedAt).toLocaleString('es-ES');
@@ -855,9 +856,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- REGISTRO SERIE ---
     registerSerieBtn.addEventListener('click', () => {
-        if (registerSerieBtn.classList.contains('disabled')) return;
         if (globalDataRaw.length === 0) {
-            alert("Primero carga un archivo Excel.");
+            alert("⚠️ No hay datos cargados. Por favor, carga un archivo Excel primero para definir las columnas del inventario.");
             return;
         }
         resetCameraUI();
@@ -876,9 +876,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- VERIFICAR POR SERIE ---
     verifySerieBtn.addEventListener('click', () => {
-        if (verifySerieBtn.classList.contains('disabled')) return;
         if (globalDataRaw.length === 0) {
-            alert("Primero carga un archivo Excel.");
+            alert("⚠️ No hay datos cargados. Por favor, carga un archivo Excel primero para realizar verificaciones.");
             return;
         }
         verifySerieInput.value = '';
@@ -947,7 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
     verifySerieInput.addEventListener('input', () => {
         const searchVal = verifySerieInput.value.trim().toUpperCase();
         verifySuggestions.innerHTML = '';
-        
+
         if (searchVal.length < 2) {
             verifySuggestions.classList.add('hidden');
             return;
@@ -972,18 +971,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sVal = row[serieKey] || 'Sin serie';
                 const iVal = row[idKey] || 'N/A';
                 const eVal = row[equipoKey] || 'Sin nombre';
-                
+
                 div.innerHTML = `
                     <strong>${sVal}</strong>
                     <small>${eVal} | ID: ${iVal}</small>
                 `;
-                
+
                 div.addEventListener('click', () => {
                     verifySerieInput.value = sVal !== 'Sin serie' ? sVal : iVal;
                     verifySuggestions.classList.add('hidden');
                     confirmVerifyBtn.click();
                 });
-                
+
                 verifySuggestions.appendChild(div);
             });
             verifySuggestions.classList.remove('hidden');
@@ -1261,7 +1260,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- QR ---
     startScanBtn.addEventListener('click', () => {
         if (globalDataRaw.length === 0) {
-            alert("Primero carga un archivo Excel.");
+            alert("⚠️ No hay datos cargados. Por favor, carga un archivo Excel primero para poder escanear y verificar equipos.");
             return;
         }
 
