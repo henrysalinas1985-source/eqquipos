@@ -35,6 +35,7 @@
             margin-bottom: 10px;
             background: linear-gradient(90deg, #00d9ff, #00ff88);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -462,6 +463,18 @@
                     Datos</button>
             </div>
             <div id="loading" class="loading hidden">Procesando...</div>
+
+            <!-- Selector de hoja Excel -->
+            <div id="sheetSelectorContainer" class="hidden"
+                style="margin-top:16px; padding:16px; background:rgba(0,217,255,0.05); border:1px solid rgba(0,217,255,0.2); border-radius:12px;">
+                <label style="color:#00d9ff; font-size:0.9rem; font-weight:500; margin-bottom:8px; display:block;">📑
+                    Seleccionar Hoja del Excel:</label>
+                <select id="sheetSelector"
+                    style="width:100%; padding:12px; border:1px solid rgba(0,217,255,0.3); border-radius:10px; background:rgba(0,0,0,0.4); color:#fff; font-size:1rem; outline:none; cursor:pointer;">
+                    <option value="">-- Seleccionar Hoja --</option>
+                </select>
+                <div id="sheetInfo" style="margin-top:8px; font-size:0.8rem; color:#888;"></div>
+            </div>
 
             <!-- Backup de imágenes -->
             <div style="margin-top:16px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.1);">

@@ -26,15 +26,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // === VARIABLES PARA MÚLTIPLES HOJAS ===
+    let globalAllSheetsData = {}; // Datos de todas las hojas
+    let globalAllSheetsHeaders = {}; // Headers de todas las hojas
+    let globalSheetNames = []; // Nombres de todas las hojas
+    let globalCurrentSheetName = ''; // Hoja actualmente seleccionada
+
     // === FUNCIONES PARA GUARDAR/CARGAR EXCEL ===
     async function saveExcelToDB() {
         if (!imageDB) await initImageDB();
 
+        // Guardar datos actuales en el objeto de todas las hojas
+        if (globalCurrentSheetName) {
+            globalAllSheetsData[globalCurrentSheetName] = globalDataRaw;
+            globalAllSheetsHeaders[globalCurrentSheetName] = globalHeaders;
+        }
+
         const excelData = {
             id: 'currentExcel',
+            allSheetsData: globalAllSheetsData,
+            allSheetsHeaders: globalAllSheetsHeaders,
+            sheetNames: globalSheetNames,
+            currentSheetName: globalCurrentSheetName,
+            // Mantener compatibilidad con versión anterior
             data: globalDataRaw,
             headers: globalHeaders,
-            sheetName: globalFirstSheetName,
+            sheetName: globalCurrentSheetName,
             savedAt: new Date().toISOString()
         };
 
@@ -44,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const store = tx.objectStore(EXCEL_STORE);
                 store.put(excelData);
                 tx.oncomplete = () => {
-                    console.log('Excel guardado en IndexedDB');
+                    console.log('Excel guardado en IndexedDB (hoja:', globalCurrentSheetName, ')');
                     resolve();
                 };
                 tx.onerror = () => reject(tx.error);
@@ -174,6 +191,53 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Elementos del selector de hojas
+    const sheetSelectorContainer = document.getElementById('sheetSelectorContainer');
+    const sheetSelector = document.getElementById('sheetSelector');
+    const sheetInfo = document.getElementById('sheetInfo');
+
+    // Función para poblar el selector de hojas
+    function populateSheetSelector(sheetNames, currentSheet) {
+        sheetSelector.innerHTML = '';
+        sheetNames.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            if (name === currentSheet) option.selected = true;
+            sheetSelector.appendChild(option);
+        });
+        sheetInfo.textContent = `${sheetNames.length} hoja(s) disponible(s)`;
+        sheetSelectorContainer.classList.remove('hidden');
+    }
+
+    // Función para cargar datos de una hoja específica
+    function loadSheetData(sheetName) {
+        // Guardar datos actuales antes de cambiar
+        if (globalCurrentSheetName && globalDataRaw.length > 0) {
+            globalAllSheetsData[globalCurrentSheetName] = globalDataRaw;
+            globalAllSheetsHeaders[globalCurrentSheetName] = globalHeaders;
+        }
+
+        globalCurrentSheetName = sheetName;
+        globalDataRaw = globalAllSheetsData[sheetName] || [];
+        globalHeaders = globalAllSheetsHeaders[sheetName] || [];
+
+        renderTable();
+        populateLocations();
+        editPanel.classList.add('hidden');
+
+        console.log('Hoja cargada:', sheetName, '- Filas:', globalDataRaw.length);
+    }
+
+    // Evento cambio de hoja
+    sheetSelector.addEventListener('change', async (e) => {
+        const selectedSheet = e.target.value;
+        if (selectedSheet) {
+            loadSheetData(selectedSheet);
+            await saveExcelToDB();
+        }
+    });
+
     // Inicializar DB y cargar Excel guardado
     initImageDB().then(async () => {
         console.log('ImageDB lista');
@@ -181,9 +245,32 @@ document.addEventListener('DOMContentLoaded', () => {
         // Intentar cargar Excel guardado
         const savedExcel = await loadExcelFromDB();
         if (savedExcel && savedExcel.data && savedExcel.data.length > 0) {
-            globalDataRaw = savedExcel.data;
-            globalHeaders = savedExcel.headers;
-            globalFirstSheetName = savedExcel.sheetName || 'Sheet1';
+            // Cargar datos de múltiples hojas si existen
+            if (savedExcel.allSheetsData && savedExcel.sheetNames) {
+                globalAllSheetsData = savedExcel.allSheetsData;
+                globalAllSheetsHeaders = savedExcel.allSheetsHeaders || {};
+                globalSheetNames = savedExcel.sheetNames;
+                globalCurrentSheetName = savedExcel.currentSheetName || savedExcel.sheetNames[0];
+
+                // Cargar datos de la hoja actual
+                globalDataRaw = globalAllSheetsData[globalCurrentSheetName] || savedExcel.data;
+                globalHeaders = globalAllSheetsHeaders[globalCurrentSheetName] || savedExcel.headers;
+
+                // Poblar selector de hojas
+                populateSheetSelector(globalSheetNames, globalCurrentSheetName);
+            } else {
+                // Compatibilidad con versión anterior (una sola hoja)
+                globalDataRaw = savedExcel.data;
+                globalHeaders = savedExcel.headers;
+                globalCurrentSheetName = savedExcel.sheetName || 'Sheet1';
+                globalSheetNames = [globalCurrentSheetName];
+                globalAllSheetsData[globalCurrentSheetName] = globalDataRaw;
+                globalAllSheetsHeaders[globalCurrentSheetName] = globalHeaders;
+
+                populateSheetSelector(globalSheetNames, globalCurrentSheetName);
+            }
+
+            globalFirstSheetName = globalCurrentSheetName;
 
             renderTable();
             populateLocations();
@@ -198,7 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fileLabel.textContent = `📂 Datos cargados (guardado: ${fecha})`;
             fileLabel.style.color = '#00ff88';
 
-            console.log('Excel cargado desde IndexedDB:', globalDataRaw.length, 'filas');
+            console.log('Excel cargado desde IndexedDB:', globalDataRaw.length, 'filas en hoja:', globalCurrentSheetName);
         }
     }).catch(console.error);
 
@@ -377,14 +464,36 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const data = new Uint8Array(e.target.result);
                 globalWorkbook = XLSX.read(data, { type: 'array', cellDates: true });
-                globalFirstSheetName = globalWorkbook.SheetNames[0];
-                const worksheet = globalWorkbook.Sheets[globalFirstSheetName];
-                globalDataRaw = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
-                if (globalDataRaw.length > 0) {
-                    globalHeaders = Object.keys(globalDataRaw[0]);
-                    console.log("Headers:", globalHeaders);
-                }
+                // Cargar TODAS las hojas del Excel
+                globalSheetNames = globalWorkbook.SheetNames;
+                globalAllSheetsData = {};
+                globalAllSheetsHeaders = {};
+
+                console.log('Hojas encontradas:', globalSheetNames);
+
+                // Procesar cada hoja
+                globalSheetNames.forEach(sheetName => {
+                    const worksheet = globalWorkbook.Sheets[sheetName];
+                    const sheetData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                    globalAllSheetsData[sheetName] = sheetData;
+                    if (sheetData.length > 0) {
+                        globalAllSheetsHeaders[sheetName] = Object.keys(sheetData[0]);
+                    } else {
+                        globalAllSheetsHeaders[sheetName] = [];
+                    }
+                });
+
+                // Seleccionar la primera hoja por defecto
+                globalCurrentSheetName = globalSheetNames[0];
+                globalFirstSheetName = globalCurrentSheetName;
+                globalDataRaw = globalAllSheetsData[globalCurrentSheetName];
+                globalHeaders = globalAllSheetsHeaders[globalCurrentSheetName];
+
+                console.log("Hoja actual:", globalCurrentSheetName, "- Headers:", globalHeaders);
+
+                // Poblar selector de hojas
+                populateSheetSelector(globalSheetNames, globalCurrentSheetName);
 
                 renderTable();
                 populateLocations();
@@ -419,11 +528,18 @@ document.addEventListener('DOMContentLoaded', () => {
             globalHeaders = [];
             globalFirstSheetName = '';
 
+            // Limpiar variables de múltiples hojas
+            globalAllSheetsData = {};
+            globalAllSheetsHeaders = {};
+            globalSheetNames = [];
+            globalCurrentSheetName = '';
+
             resultsArea.classList.add('hidden');
             exportBtn.disabled = true;
             registerSerieBtn.classList.add('disabled');
             verifySerieBtn.classList.add('disabled');
             clearExcelBtn.classList.add('hidden');
+            sheetSelectorContainer.classList.add('hidden');
             fileLabel.textContent = 'Haz clic para seleccionar archivo';
             fileLabel.style.color = '#aaa';
             fileInput.value = '';
@@ -434,13 +550,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- EXPORTAR ---
     exportBtn.addEventListener('click', () => {
-        if (globalDataRaw.length === 0) return;
+        if (globalSheetNames.length === 0) return;
+
+        // Asegurar que la hoja actual esté actualizada en globalAllSheetsData
+        if (globalCurrentSheetName) {
+            globalAllSheetsData[globalCurrentSheetName] = globalDataRaw;
+        }
+
         try {
-            const newSheet = XLSX.utils.json_to_sheet(globalDataRaw);
             const newWb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(newWb, newSheet, globalFirstSheetName || "Sheet1");
-            XLSX.writeFile(newWb, "Equipos_Actualizados.xlsx");
+
+            // Agregar cada hoja al nuevo libro
+            globalSheetNames.forEach(sheetName => {
+                const sheetData = globalAllSheetsData[sheetName] || [];
+                const newSheet = XLSX.utils.json_to_sheet(sheetData);
+                XLSX.utils.book_append_sheet(newWb, newSheet, sheetName);
+            });
+
+            XLSX.writeFile(newWb, "Equipos_Actualizados_MultiHoja.xlsx");
+            console.log("Exportación multi-hoja completada");
         } catch (err) {
+            console.error(err);
             alert("Error al exportar.");
         }
     });
