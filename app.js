@@ -1320,6 +1320,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 globalDataRaw[existsIndex][obsKey] = obsVal;
             }
 
+            // Marcar como verificado automáticamente
+            const verifiedCol = 'Verificado';
+            if (!globalHeaders.includes(verifiedCol)) {
+                globalHeaders.push(verifiedCol);
+                globalDataRaw.forEach(r => { if (!(verifiedCol in r)) r[verifiedCol] = ''; });
+            }
+            globalDataRaw[existsIndex][verifiedCol] = '✅';
+
             // Si hay imagen nueva, descargarla y actualizar referencia
             const imgKey = getColumnKey('imagen') || getColumnKey('foto');
             if (capturedImageData) {
@@ -1370,6 +1378,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // También descargar
             downloadImage(capturedImageData, imgFilename);
         }
+
+        // Marcar como verificado automáticamente
+        const verifiedCol = 'Verificado';
+        if (!globalHeaders.includes(verifiedCol)) {
+            globalHeaders.push(verifiedCol);
+            globalDataRaw.forEach(r => { if (!(verifiedCol in r)) r[verifiedCol] = ''; });
+        }
+        newRow[verifiedCol] = '✅';
 
         globalDataRaw.push(newRow);
         renderTable();
