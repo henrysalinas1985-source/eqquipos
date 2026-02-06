@@ -441,6 +441,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelVerifyBtn = document.getElementById('cancelVerifyBtn');
     const verifyFeedback = document.getElementById('verifyFeedback');
 
+    // Image Viewer Elements
+    const imageViewerModal = document.getElementById('imageViewerModal');
+    const fullSizeImage = document.getElementById('fullSizeImage');
+    const closeImageViewer = document.getElementById('closeImageViewer');
+
+    function showImageViewer(src) {
+        if (!src) return;
+        fullSizeImage.src = src;
+        imageViewerModal.classList.remove('hidden');
+    }
+
+    function hideImageViewer() {
+        imageViewerModal.classList.add('hidden');
+        fullSizeImage.src = '';
+    }
+
+    imageViewerModal.addEventListener('click', hideImageViewer);
+    closeImageViewer.addEventListener('click', hideImageViewer);
+
     // --- ARCHIVO ---
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
@@ -729,9 +748,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 getImageFromDB(imgRef).then(dataUrl => {
                     if (dataUrl) {
                         imgContainer.innerHTML = `
-                            <img src="${dataUrl}" style="width:100%; height:80px; object-fit:cover; border-radius:8px; border:2px solid #00ff88;" loading="lazy">
+                            <img src="${dataUrl}" style="width:100%; height:80px; object-fit:cover; border-radius:8px; border:2px solid #00ff88; cursor:pointer; transition:transform 0.2s;" loading="lazy">
                             <small style="color:#888; font-size:0.7rem; display:block; text-align:center; margin-top:2px;">${imgRef}</small>
                         `;
+                        const img = imgContainer.querySelector('img');
+                        img.onclick = () => showImageViewer(dataUrl);
+                        img.onmouseover = () => img.style.transform = 'scale(1.05)';
+                        img.onmouseout = () => img.style.transform = 'scale(1)';
                     } else {
                         imgContainer.innerHTML = `
                             <div style="width:100%; height:80px; background:rgba(255,255,255,0.05); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.75rem;">No encontrada</div>
@@ -1194,6 +1217,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         capturedImageData = canvas.toDataURL('image/jpeg', 0.5);
         capturedImage.src = capturedImageData;
+        capturedImage.style.cursor = 'pointer';
+        capturedImage.onclick = () => showImageViewer(capturedImageData);
 
         stopCamera();
         cameraContainer.classList.add('hidden');
