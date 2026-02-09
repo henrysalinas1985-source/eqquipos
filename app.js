@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
             data: globalDataRaw,
             headers: globalHeaders,
             sheetName: globalCurrentSheetName,
+            fileName: exportFileName.value,
             savedAt: new Date().toISOString()
         };
 
@@ -280,6 +281,11 @@ document.addEventListener('DOMContentLoaded', () => {
             registerSerieBtn.classList.remove('disabled');
             verifySerieBtn.classList.remove('disabled');
             clearExcelBtn.classList.remove('hidden');
+            exportNameContainer.classList.remove('hidden');
+
+            if (savedExcel.fileName) {
+                exportFileName.value = savedExcel.fileName;
+            }
 
             const fecha = new Date(savedExcel.savedAt).toLocaleString('es-ES');
             fileLabel.textContent = `📂 Datos cargados (guardado: ${fecha})`;
@@ -377,6 +383,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsArea = document.getElementById('resultsArea');
     const exportBtn = document.getElementById('exportBtn');
     const clearExcelBtn = document.getElementById('clearExcelBtn');
+    const exportNameContainer = document.getElementById('exportNameContainer');
+    const exportFileName = document.getElementById('exportFileName');
 
     // Variables Globales
     let globalDataRaw = [];
@@ -463,8 +471,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- ARCHIVO ---
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
-            fileLabel.textContent = e.target.files[0].name;
+            const file = e.target.files[0];
+            fileLabel.textContent = file.name;
             fileLabel.style.color = '#00d9ff';
+
+            // Sugerir nombre de archivo basado en el original (sin extensión)
+            const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            exportFileName.value = nameWithoutExt;
+            exportNameContainer.classList.remove('hidden');
         }
     });
 
@@ -562,6 +576,8 @@ document.addEventListener('DOMContentLoaded', () => {
             fileLabel.textContent = 'Haz clic para seleccionar archivo';
             fileLabel.style.color = '#aaa';
             fileInput.value = '';
+            exportFileName.value = '';
+            exportNameContainer.classList.add('hidden');
 
             alert('Datos borrados. Puedes cargar un nuevo archivo.');
         }
@@ -586,8 +602,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 XLSX.utils.book_append_sheet(newWb, newSheet, sheetName);
             });
 
-            XLSX.writeFile(newWb, "Equipos_Actualizados_MultiHoja.xlsx");
-            console.log("Exportación multi-hoja completada");
+            // Obtener nombre del archivo y sanitizar
+            let fileName = exportFileName.value.trim();
+            if (!fileName) fileName = "Equipos_Actualizados";
+
+            // Sanitizar: quitar caracteres no deseados
+            fileName = fileName.replace(/[\\\/:*?"<>|]/g, "_");
+
+            XLSX.writeFile(newWb, `${fileName}.xlsx`);
+            console.log("Exportación multi-hoja completada:", fileName);
         } catch (err) {
             console.error(err);
             alert("Error al exportar.");

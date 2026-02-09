@@ -445,8 +445,11 @@
 
     <!-- Modal Visor de Imagen -->
     <div id="imageViewerModal" class="modal-overlay hidden" style="background: rgba(0,0,0,0.95); cursor: zoom-out;">
-        <div id="closeImageViewer" style="position: absolute; top: 20px; right: 20px; font-size: 2.5rem; color: #fff; cursor: pointer; z-index: 1001; line-height: 1;">&times;</div>
-        <img id="fullSizeImage" src="" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; box-shadow: 0 0 50px rgba(0,217,255,0.2); transition: transform 0.3s ease;">
+        <div id="closeImageViewer"
+            style="position: absolute; top: 20px; right: 20px; font-size: 2.5rem; color: #fff; cursor: pointer; z-index: 1001; line-height: 1;">
+            &times;</div>
+        <img id="fullSizeImage" src=""
+            style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; box-shadow: 0 0 50px rgba(0,217,255,0.2); transition: transform 0.3s ease;">
     </div>
 
     <div class="container">
@@ -461,6 +464,17 @@
                 <div class="icon">📄</div>
                 <div class="text" id="fileLabel">Haz clic para seleccionar archivo</div>
             </label>
+
+            <div id="exportNameContainer" class="hidden" style="margin-bottom: 16px;">
+                <div class="input-group" style="margin-bottom: 0;">
+                    <label>📝 Nombre del archivo a exportar</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="exportFileName" placeholder="Equipos_Actualizados" style="flex: 1;">
+                        <span style="color: #888; font-weight: 500;">.xlsx</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="btn-row">
                 <button id="processBtn" class="btn btn-primary">Procesar Archivo</button>
                 <button id="exportBtn" class="btn btn-success" disabled>💾 Exportar Excel</button>
