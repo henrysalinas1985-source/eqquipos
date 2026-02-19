@@ -508,10 +508,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Procesar cada hoja
                 globalSheetNames.forEach(sheetName => {
                     const worksheet = globalWorkbook.Sheets[sheetName];
-                    const sheetData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                    let sheetData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    // Limpiar datos: eliminar filas donde todos los valores sean vacíos o nulos
+                    sheetData = sheetData.filter(row => {
+                        return Object.values(row).some(val => val !== "" && val !== null && val !== undefined);
+                    });
+
                     globalAllSheetsData[sheetName] = sheetData;
+
                     if (sheetData.length > 0) {
-                        globalAllSheetsHeaders[sheetName] = Object.keys(sheetData[0]);
+                        // Filtrar headers que empiezan con __EMPTY (columnas sin nombre en Excel)
+                        globalAllSheetsHeaders[sheetName] = Object.keys(sheetData[0]).filter(h => !h.startsWith('__EMPTY'));
                     } else {
                         globalAllSheetsHeaders[sheetName] = [];
                     }
