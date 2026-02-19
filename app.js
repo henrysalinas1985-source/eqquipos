@@ -644,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
 
-    function renderTable(filterValue = '') {
+    function renderTable(filterSerieValue = '', filterMagnitudValue = '') {
         const thead = document.querySelector('#tableMain thead');
         const tbody = document.querySelector('#tableMain tbody');
         thead.innerHTML = '';
@@ -661,14 +661,22 @@ document.addEventListener('DOMContentLoaded', () => {
         thead.appendChild(headerRow);
 
         const serieKey = getColumnKey('serie');
+        const magnitudKey = getColumnKey('magnitud');
         const normalize = s => String(s || '').trim().toUpperCase();
-        const filterNorm = normalize(filterValue);
+        const filterSerieNorm = normalize(filterSerieValue);
+        const filterMagnitudNorm = normalize(filterMagnitudValue);
 
         globalDataRaw.forEach((row, index) => {
-            // Filtrar por serie si hay filtro
-            if (filterValue && serieKey) {
+            // Filtrar por serie
+            if (filterSerieValue && serieKey) {
                 const serieVal = normalize(row[serieKey]);
-                if (!serieVal.includes(filterNorm)) return;
+                if (!serieVal.includes(filterSerieNorm)) return;
+            }
+
+            // Filtrar por magnitud
+            if (filterMagnitudValue && magnitudKey) {
+                const magnitudVal = normalize(row[magnitudKey]);
+                if (!magnitudVal.includes(filterMagnitudNorm)) return;
             }
 
             const tr = document.createElement('tr');
@@ -738,7 +746,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Evento filtro de tabla
     document.getElementById('filterSerieInput').addEventListener('input', function () {
-        renderTable(this.value);
+        const filterMagnitud = document.getElementById('filterMagnitudInput').value;
+        renderTable(this.value, filterMagnitud);
+    });
+
+    document.getElementById('filterMagnitudInput').addEventListener('input', function () {
+        const filterSerie = document.getElementById('filterSerieInput').value;
+        renderTable(filterSerie, this.value);
     });
 
     // --- CARGAR MÚLTIPLES IMÁGENES EN EDICIÓN ---
@@ -1645,7 +1659,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // FUNCIONALIDAD ESTACIONES DE AGUA (INDEPENDIENTE)
 // ============================================
 
-(function() {
+(function () {
     // === BOTÓN PARA ABRIR/CERRAR SECCIÓN ===
     const openEstacionesBtn = document.getElementById('openEstacionesBtn');
     const closeEstacionesBtn = document.getElementById('closeEstacionesBtn');
@@ -1928,7 +1942,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 for (const row of prevData) {
                     // Buscar estación por nombre o serie
-                    const estacion = ESTACIONES.find(e => 
+                    const estacion = ESTACIONES.find(e =>
                         e.nombre === row['Estación'] || e.serie === row['Serie']
                     );
 
@@ -1950,7 +1964,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const corrData = XLSX.utils.sheet_to_json(corrSheet);
 
                 for (const row of corrData) {
-                    const estacion = ESTACIONES.find(e => 
+                    const estacion = ESTACIONES.find(e =>
                         e.nombre === row['Estación'] || e.serie === row['Serie']
                     );
 
@@ -1973,7 +1987,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sumData = XLSX.utils.sheet_to_json(sumSheet);
 
                 for (const row of sumData) {
-                    const estacion = ESTACIONES.find(e => 
+                    const estacion = ESTACIONES.find(e =>
                         e.nombre === row['Estación'] || e.serie === row['Serie']
                     );
 
@@ -1997,7 +2011,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const volData = XLSX.utils.sheet_to_json(volSheet);
 
                 for (const row of volData) {
-                    const estacion = ESTACIONES.find(e => 
+                    const estacion = ESTACIONES.find(e =>
                         e.nombre === row['Estación'] || e.serie === row['Serie']
                     );
 
@@ -2015,7 +2029,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             showEstacionesFeedback(`✅ ${importedCount} registros importados correctamente`, 'success');
-            
+
             // Actualizar vista si está abierta
             if (!estacionesSection.classList.contains('hidden')) {
                 await renderStations();
@@ -2148,10 +2162,10 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         managementPanel.classList.remove('hidden');
-        
+
         // Inicializar tabs cada vez que se abre el panel
         initializeTabs();
-        
+
         await renderStations();
         await loadCurrentTabData();
 
@@ -2415,7 +2429,7 @@ document.addEventListener('DOMContentLoaded', () => {
             item.className = 'timeline-item';
             const mesFormateado = formatMonthYear(vol.mes);
             const litrosFormateados = parseFloat(vol.litros).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            
+
             item.innerHTML = `
                 <div class="timeline-date">${mesFormateado}</div>
                 <div style="color: #4facfe; font-weight: 600; font-size: 1.1rem; margin-bottom: 6px;">
