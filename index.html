@@ -550,6 +550,60 @@
             font-size: 3rem;
             margin-bottom: 10px;
         }
+
+        /* Utility for responsive 2-column grids */
+        .grid-2-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .station-tabs-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            overflow-x: auto;
+            white-space: nowrap;
+            /* Hide scrollbar for cleaner look but keep scrollable */
+            scrollbar-width: none;
+            /* Firefox */
+            -ms-overflow-style: none;
+            /* IE/Edge */
+        }
+
+        .station-tabs-container::-webkit-scrollbar {
+            display: none;
+            /* Chrome/Safari/Opera */
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .card {
+                padding: 16px;
+            }
+
+            .grid-2-col {
+                grid-template-columns: 1fr;
+            }
+
+            .btn-row {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .station-stats {
+                grid-template-columns: 1fr;
+                gap: 5px;
+            }
+        }
     </style>
 </head>
 
@@ -746,7 +800,7 @@
                         <video id="editCameraVideo" autoplay playsinline
                             style="width:100%; max-height:200px; object-fit:cover; border-radius:10px; border:2px solid #00d9ff;"></video>
                     </div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <div class="grid-2-col">
                         <button type="button" id="addImageBtn" class="btn btn-secondary"
                             style="padding:10px; font-size:0.9rem;">📷 Agregar Foto</button>
                         <button type="button" id="captureEditPhotoBtn" class="btn btn-primary hidden"
@@ -783,7 +837,7 @@
         <!-- Tabla de Datos -->
         <div id="resultsArea" class="card hidden">
             <h2>📋 Datos del Excel</h2>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div class="grid-2-col" style="margin-bottom: 16px;">
                 <div class="input-group" style="margin-bottom: 0;">
                     <label>🔍 Filtrar por Serie</label>
                     <input type="text" id="filterSerieInput" placeholder="Serie..." style="text-transform: uppercase;">
@@ -853,156 +907,154 @@
             id="stationsGrid"></div>
 
         <!-- Panel de Gestión de Estaciones -->
-        <div id="managementPanel" class="hidden">
-            <div class="card">
-                <h2 id="currentStationTitle" style="color: #4facfe;"></h2>
+        <div id="managementPanel" class="card hidden">
+            <h2 id="currentStationTitle" style="color: #4facfe;"></h2>
 
-                <div
-                    style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid rgba(255, 255, 255, 0.1);">
-                    <button class="station-tab active" data-tab="preventivos">📅 Preventivos</button>
-                    <button class="station-tab" data-tab="correctivos">🔧 Correctivos</button>
-                    <button class="station-tab" data-tab="suministros">📦 Suministros</button>
-                    <button class="station-tab" data-tab="volumenes">💧 Volumen</button>
-                </div>
+            <div class="station-tabs-container">
+                <button class="station-tab active" data-tab="preventivos">📅 Preventivos</button>
+                <button class="station-tab" data-tab="correctivos">🔧 Correctivos</button>
+                <button class="station-tab" data-tab="suministros">📦 Suministros</button>
+                <button class="station-tab" data-tab="volumenes">💧 Volumen</button>
+            </div>
 
-                <!-- Tab Preventivos -->
-                <div class="station-tab-content active" id="preventivos-content">
-                    <button id="addPreventivoBtn" class="btn btn-primary">➕ Nuevo Preventivo</button>
-                    <div id="preventivosList" style="position: relative; padding-left: 30px;"></div>
-                </div>
+            <!-- Tab Preventivos -->
+            <div class="station-tab-content active" id="preventivos-content">
+                <button id="addPreventivoBtn" class="btn btn-primary">➕ Nuevo Preventivo</button>
+                <div id="preventivosList" style="position: relative; padding-left: 30px;"></div>
+            </div>
 
-                <!-- Tab Correctivos -->
-                <div class="station-tab-content" id="correctivos-content">
-                    <button id="addCorrectivoBtn" class="btn btn-primary">➕ Nuevo Correctivo</button>
-                    <div id="correctivosList" style="position: relative; padding-left: 30px;"></div>
-                </div>
+            <!-- Tab Correctivos -->
+            <div class="station-tab-content" id="correctivos-content">
+                <button id="addCorrectivoBtn" class="btn btn-primary">➕ Nuevo Correctivo</button>
+                <div id="correctivosList" style="position: relative; padding-left: 30px;"></div>
+            </div>
 
-                <!-- Tab Suministros -->
-                <div class="station-tab-content" id="suministros-content">
-                    <button id="addSuministroBtn" class="btn btn-primary">➕ Nuevo Suministro</button>
-                    <div id="suministrosList" style="position: relative; padding-left: 30px;"></div>
-                </div>
+            <!-- Tab Suministros -->
+            <div class="station-tab-content" id="suministros-content">
+                <button id="addSuministroBtn" class="btn btn-primary">➕ Nuevo Suministro</button>
+                <div id="suministrosList" style="position: relative; padding-left: 30px;"></div>
+            </div>
 
-                <!-- Tab Volúmenes -->
-                <div class="station-tab-content" id="volumenes-content">
-                    <button id="addVolumenBtn" class="btn btn-primary">➕ Registrar Volumen Mensual</button>
-                    <div id="volumenesList" style="position: relative; padding-left: 30px;"></div>
-                </div>
+            <!-- Tab Volúmenes -->
+            <div class="station-tab-content" id="volumenes-content">
+                <button id="addVolumenBtn" class="btn btn-primary">➕ Registrar Volumen Mensual</button>
+                <div id="volumenesList" style="position: relative; padding-left: 30px;"></div>
             </div>
         </div>
+    </div>
 
-        <!-- Modal Preventivo -->
-        <div id="preventivoModal" class="modal-overlay hidden">
-            <div class="modal">
-                <h3>📅 Registrar Preventivo</h3>
-                <div class="input-group">
-                    <label>Fecha del Preventivo</label>
-                    <input type="date" id="preventivoFecha">
-                </div>
-                <div class="input-group">
-                    <label>Novedades</label>
-                    <textarea id="preventivoNovedades" placeholder="Describe las actividades realizadas..."
-                        style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; min-height: 80px;"></textarea>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button id="savePreventivoBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
-                    <button id="cancelPreventivoBtn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
-                </div>
+    <!-- Modal Preventivo -->
+    <div id="preventivoModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h3>📅 Registrar Preventivo</h3>
+            <div class="input-group">
+                <label>Fecha del Preventivo</label>
+                <input type="date" id="preventivoFecha">
+            </div>
+            <div class="input-group">
+                <label>Novedades</label>
+                <textarea id="preventivoNovedades" placeholder="Describe las actividades realizadas..."
+                    style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; min-height: 80px;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="savePreventivoBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
+                <button id="cancelPreventivoBtn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
             </div>
         </div>
+    </div>
 
-        <!-- Modal Correctivo -->
-        <div id="correctivoModal" class="modal-overlay hidden">
-            <div class="modal">
-                <h3>🔧 Registrar Correctivo</h3>
-                <div class="input-group">
-                    <label>Fecha del Correctivo</label>
-                    <input type="date" id="correctivoFecha">
-                </div>
-                <div class="input-group">
-                    <label>Clase de Correctivo</label>
-                    <select id="correctivoClase">
-                        <option value="">-- Seleccionar --</option>
-                        <option value="Fuga de agua">Fuga de agua</option>
-                        <option value="Problema eléctrico">Problema eléctrico</option>
-                        <option value="Filtro obstruido">Filtro obstruido</option>
-                        <option value="Bomba dañada">Bomba dañada</option>
-                        <option value="Sensor defectuoso">Sensor defectuoso</option>
-                        <option value="Otro">Otro</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>Novedades del Correctivo</label>
-                    <textarea id="correctivoNovedades" placeholder="Describe el problema y la solución..."
-                        style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; min-height: 80px;"></textarea>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button id="saveCorrectivoBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
-                    <button id="cancelCorrectivoBtn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
-                </div>
+    <!-- Modal Correctivo -->
+    <div id="correctivoModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h3>🔧 Registrar Correctivo</h3>
+            <div class="input-group">
+                <label>Fecha del Correctivo</label>
+                <input type="date" id="correctivoFecha">
+            </div>
+            <div class="input-group">
+                <label>Clase de Correctivo</label>
+                <select id="correctivoClase">
+                    <option value="">-- Seleccionar --</option>
+                    <option value="Fuga de agua">Fuga de agua</option>
+                    <option value="Problema eléctrico">Problema eléctrico</option>
+                    <option value="Filtro obstruido">Filtro obstruido</option>
+                    <option value="Bomba dañada">Bomba dañada</option>
+                    <option value="Sensor defectuoso">Sensor defectuoso</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Novedades del Correctivo</label>
+                <textarea id="correctivoNovedades" placeholder="Describe el problema y la solución..."
+                    style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; min-height: 80px;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="saveCorrectivoBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
+                <button id="cancelCorrectivoBtn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
             </div>
         </div>
+    </div>
 
-        <!-- Modal Suministro -->
-        <div id="suministroModal" class="modal-overlay hidden">
-            <div class="modal">
-                <h3>📦 Registrar Suministro</h3>
-                <div class="input-group">
-                    <label>Fecha del Suministro</label>
-                    <input type="date" id="suministroFecha">
-                </div>
-                <div class="input-group">
-                    <label>Accesorio/Insumo</label>
-                    <select id="suministroAccesorio">
-                        <option value="">-- Seleccionar --</option>
-                        <option value="Micro filtro de alimentación">Micro filtro de alimentación</option>
-                        <option value="Carbón Block">Carbón Block</option>
-                        <option value="LC141 (pack de resina)">LC141 (pack de resina)</option>
-                        <option value="LC174 (pack de resina)">LC174 (pack de resina)</option>
-                        <option value="CT3">CT3</option>
-                        <option value="Otro">Otro (especificar en observaciones)</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>Cantidad</label>
-                    <input type="number" id="suministroCantidad" min="1" value="1">
-                </div>
-                <div class="input-group">
-                    <label>Observaciones</label>
-                    <textarea id="suministroObservaciones" placeholder="Detalles adicionales..."
-                        style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; min-height: 80px;"></textarea>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button id="saveSuministroBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
-                    <button id="cancelSuministroBtn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
-                </div>
+    <!-- Modal Suministro -->
+    <div id="suministroModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h3>📦 Registrar Suministro</h3>
+            <div class="input-group">
+                <label>Fecha del Suministro</label>
+                <input type="date" id="suministroFecha">
+            </div>
+            <div class="input-group">
+                <label>Accesorio/Insumo</label>
+                <select id="suministroAccesorio">
+                    <option value="">-- Seleccionar --</option>
+                    <option value="Micro filtro de alimentación">Micro filtro de alimentación</option>
+                    <option value="Carbón Block">Carbón Block</option>
+                    <option value="LC141 (pack de resina)">LC141 (pack de resina)</option>
+                    <option value="LC174 (pack de resina)">LC174 (pack de resina)</option>
+                    <option value="CT3">CT3</option>
+                    <option value="Otro">Otro (especificar en observaciones)</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Cantidad</label>
+                <input type="number" id="suministroCantidad" min="1" value="1">
+            </div>
+            <div class="input-group">
+                <label>Observaciones</label>
+                <textarea id="suministroObservaciones" placeholder="Detalles adicionales..."
+                    style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; min-height: 80px;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="saveSuministroBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
+                <button id="cancelSuministroBtn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
             </div>
         </div>
+    </div>
 
-        <!-- Modal Volumen -->
-        <div id="volumenModal" class="modal-overlay hidden">
-            <div class="modal">
-                <h3>💧 Registrar Volumen Mensual</h3>
-                <div class="input-group">
-                    <label>Mes y Año</label>
-                    <input type="month" id="volumenMes">
-                </div>
-                <div class="input-group">
-                    <label>Volumen Consumido (Litros)</label>
-                    <input type="number" id="volumenLitros" min="0" step="0.01" placeholder="Ej: 15000">
-                </div>
-                <div class="input-group">
-                    <label>Observaciones</label>
-                    <textarea id="volumenObservaciones" placeholder="Detalles adicionales..."
-                        style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; min-height: 80px;"></textarea>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button id="saveVolumenBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
-                    <button id="cancelVolumenBtn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
-                </div>
+    <!-- Modal Volumen -->
+    <div id="volumenModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h3>💧 Registrar Volumen Mensual</h3>
+            <div class="input-group">
+                <label>Mes y Año</label>
+                <input type="month" id="volumenMes">
+            </div>
+            <div class="input-group">
+                <label>Volumen Consumido (Litros)</label>
+                <input type="number" id="volumenLitros" min="0" step="0.01" placeholder="Ej: 15000">
+            </div>
+            <div class="input-group">
+                <label>Observaciones</label>
+                <textarea id="volumenObservaciones" placeholder="Detalles adicionales..."
+                    style="width:100%; padding:14px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; background:rgba(0,0,0,0.3); color:#fff; font-size:1rem; resize:vertical; outline:none; min-height: 80px;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="saveVolumenBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
+                <button id="cancelVolumenBtn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
             </div>
         </div>
-        <!-- FIN SECCIÓN ESTACIONES DE AGUA -->
+    </div>
+    <!-- FIN SECCIÓN ESTACIONES DE AGUA -->
 
     </div>
 
