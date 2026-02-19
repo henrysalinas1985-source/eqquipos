@@ -1639,3 +1639,872 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTable(filterInput ? filterInput.value : '');
     });
 });
+
+
+// ============================================
+// FUNCIONALIDAD ESTACIONES DE AGUA (INDEPENDIENTE)
+// ============================================
+
+(function() {
+    // === BOTÓN PARA ABRIR/CERRAR SECCIÓN ===
+    const openEstacionesBtn = document.getElementById('openEstacionesBtn');
+    const closeEstacionesBtn = document.getElementById('closeEstacionesBtn');
+    const estacionesSection = document.getElementById('estacionesSection');
+    const exportEstacionesBtn = document.getElementById('exportEstacionesBtn');
+    const importEstacionesInput = document.getElementById('importEstacionesInput');
+    const estacionesFeedback = document.getElementById('estacionesFeedback');
+
+    function showEstacionesFeedback(message, type = 'success') {
+        estacionesFeedback.textContent = message;
+        estacionesFeedback.className = `feedback ${type}`;
+        estacionesFeedback.classList.remove('hidden');
+        setTimeout(() => {
+            estacionesFeedback.classList.add('hidden');
+        }, 4000);
+    }
+
+    openEstacionesBtn.addEventListener('click', () => {
+        estacionesSection.classList.remove('hidden');
+        estacionesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    closeEstacionesBtn.addEventListener('click', () => {
+        estacionesSection.classList.add('hidden');
+        // Scroll de vuelta a las acciones
+        document.querySelector('.actions-grid').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    // === CONFIGURACIÓN DE ESTACIONES ===
+    const ESTACIONES = [
+        {
+            id: 'A',
+            nombre: 'Estación A',
+            serie: 'EST-01543',
+            proveedor: 'Abbott'
+        },
+        {
+            id: 'B',
+            nombre: 'Estación B',
+            serie: 'EST-MR120H2732252',
+            proveedor: 'Abbott'
+        },
+        {
+            id: 'C',
+            nombre: 'Estación C',
+            serie: 'EST-MP00003507',
+            proveedor: 'Abbott'
+        },
+        {
+            id: 'D',
+            nombre: 'Estación D',
+            serie: 'EST-AGU-MP00005085',
+            proveedor: 'Roche'
+        }
+    ];
+
+    // === INDEXEDDB PARA ESTACIONES ===
+    let stationsDB = null;
+    const STATIONS_DB_NAME = 'EstacionesAguaDB';
+    const STATIONS_DB_VERSION = 2; // Incrementar versión para agregar store de volúmenes
+
+    function initStationsDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(STATIONS_DB_NAME, STATIONS_DB_VERSION);
+
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                stationsDB = request.result;
+                resolve(stationsDB);
+            };
+
+            request.onupgradeneeded = (e) => {
+                const database = e.target.result;
+
+                // Store para preventivos
+                if (!database.objectStoreNames.contains('preventivos')) {
+                    const prevStore = database.createObjectStore('preventivos', { keyPath: 'id', autoIncrement: true });
+                    prevStore.createIndex('estacionId', 'estacionId', { unique: false });
+                    prevStore.createIndex('fecha', 'fecha', { unique: false });
+                }
+
+                // Store para correctivos
+                if (!database.objectStoreNames.contains('correctivos')) {
+                    const corrStore = database.createObjectStore('correctivos', { keyPath: 'id', autoIncrement: true });
+                    corrStore.createIndex('estacionId', 'estacionId', { unique: false });
+                    corrStore.createIndex('fecha', 'fecha', { unique: false });
+                }
+
+                // Store para suministros
+                if (!database.objectStoreNames.contains('suministros')) {
+                    const sumStore = database.createObjectStore('suministros', { keyPath: 'id', autoIncrement: true });
+                    sumStore.createIndex('estacionId', 'estacionId', { unique: false });
+                    sumStore.createIndex('fecha', 'fecha', { unique: false });
+                }
+
+                // Store para volúmenes
+                if (!database.objectStoreNames.contains('volumenes')) {
+                    const volStore = database.createObjectStore('volumenes', { keyPath: 'id', autoIncrement: true });
+                    volStore.createIndex('estacionId', 'estacionId', { unique: false });
+                    volStore.createIndex('mes', 'mes', { unique: false });
+                }
+            };
+        });
+    }
+
+    // === FUNCIONES DE BASE DE DATOS ===
+    function addStationRecord(storeName, data) {
+        return new Promise((resolve, reject) => {
+            const tx = stationsDB.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.add(data);
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    function getStationRecordsByStation(storeName, estacionId) {
+        return new Promise((resolve, reject) => {
+            const tx = stationsDB.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const index = store.index('estacionId');
+            const request = index.getAll(estacionId);
+
+            request.onsuccess = () => {
+                const records = request.result || [];
+                records.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+                resolve(records);
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    function getAllStationRecords(storeName) {
+        return new Promise((resolve, reject) => {
+            const tx = stationsDB.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    function clearAllStationRecords(storeName) {
+        return new Promise((resolve, reject) => {
+            const tx = stationsDB.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.clear();
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // === EXPORTAR A EXCEL ===
+    exportEstacionesBtn.addEventListener('click', async () => {
+        try {
+            exportEstacionesBtn.disabled = true;
+            exportEstacionesBtn.textContent = '⏳ Exportando...';
+
+            // Obtener todos los registros
+            const preventivos = await getAllStationRecords('preventivos');
+            const correctivos = await getAllStationRecords('correctivos');
+            const suministros = await getAllStationRecords('suministros');
+            const volumenes = await getAllStationRecords('volumenes');
+
+            if (preventivos.length === 0 && correctivos.length === 0 && suministros.length === 0 && volumenes.length === 0) {
+                showEstacionesFeedback('No hay datos para exportar', 'warning');
+                return;
+            }
+
+            // Crear libro de Excel
+            const wb = XLSX.utils.book_new();
+
+            // Hoja 1: Preventivos
+            const prevData = preventivos.map(p => {
+                const estacion = ESTACIONES.find(e => e.id === p.estacionId);
+                return {
+                    'Estación': estacion ? estacion.nombre : p.estacionId,
+                    'Serie': estacion ? estacion.serie : '',
+                    'Proveedor': estacion ? estacion.proveedor : '',
+                    'Fecha': p.fecha,
+                    'Novedades': p.novedades,
+                    'Registrado': new Date(p.createdAt).toLocaleString('es-ES')
+                };
+            });
+            if (prevData.length > 0) {
+                const ws1 = XLSX.utils.json_to_sheet(prevData);
+                XLSX.utils.book_append_sheet(wb, ws1, 'Preventivos');
+            }
+
+            // Hoja 2: Correctivos
+            const corrData = correctivos.map(c => {
+                const estacion = ESTACIONES.find(e => e.id === c.estacionId);
+                return {
+                    'Estación': estacion ? estacion.nombre : c.estacionId,
+                    'Serie': estacion ? estacion.serie : '',
+                    'Proveedor': estacion ? estacion.proveedor : '',
+                    'Fecha': c.fecha,
+                    'Clase de Correctivo': c.clase,
+                    'Novedades': c.novedades,
+                    'Registrado': new Date(c.createdAt).toLocaleString('es-ES')
+                };
+            });
+            if (corrData.length > 0) {
+                const ws2 = XLSX.utils.json_to_sheet(corrData);
+                XLSX.utils.book_append_sheet(wb, ws2, 'Correctivos');
+            }
+
+            // Hoja 3: Suministros
+            const sumData = suministros.map(s => {
+                const estacion = ESTACIONES.find(e => e.id === s.estacionId);
+                return {
+                    'Estación': estacion ? estacion.nombre : s.estacionId,
+                    'Serie': estacion ? estacion.serie : '',
+                    'Proveedor': estacion ? estacion.proveedor : '',
+                    'Fecha': s.fecha,
+                    'Accesorio/Insumo': s.accesorio,
+                    'Cantidad': s.cantidad,
+                    'Observaciones': s.observaciones || '',
+                    'Registrado': new Date(s.createdAt).toLocaleString('es-ES')
+                };
+            });
+            if (sumData.length > 0) {
+                const ws3 = XLSX.utils.json_to_sheet(sumData);
+                XLSX.utils.book_append_sheet(wb, ws3, 'Suministros');
+            }
+
+            // Hoja 4: Volúmenes
+            const volData = volumenes.map(v => {
+                const estacion = ESTACIONES.find(e => e.id === v.estacionId);
+                return {
+                    'Estación': estacion ? estacion.nombre : v.estacionId,
+                    'Serie': estacion ? estacion.serie : '',
+                    'Proveedor': estacion ? estacion.proveedor : '',
+                    'Mes': v.mes,
+                    'Volumen (Litros)': v.litros,
+                    'Observaciones': v.observaciones || '',
+                    'Registrado': new Date(v.createdAt).toLocaleString('es-ES')
+                };
+            });
+            if (volData.length > 0) {
+                const ws4 = XLSX.utils.json_to_sheet(volData);
+                XLSX.utils.book_append_sheet(wb, ws4, 'Volumenes');
+            }
+
+            // Descargar archivo
+            const fileName = `Estaciones_Agua_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+            showEstacionesFeedback('✅ Excel exportado correctamente', 'success');
+
+        } catch (error) {
+            console.error('Error exportando:', error);
+            showEstacionesFeedback('Error al exportar', 'error');
+        } finally {
+            exportEstacionesBtn.disabled = false;
+            exportEstacionesBtn.textContent = '💾 Exportar a Excel';
+        }
+    });
+
+    // === IMPORTAR DESDE EXCEL ===
+    importEstacionesInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            showEstacionesFeedback('⏳ Importando datos...', 'warning');
+
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+
+            let importedCount = 0;
+
+            // Importar Preventivos
+            if (workbook.SheetNames.includes('Preventivos')) {
+                const prevSheet = workbook.Sheets['Preventivos'];
+                const prevData = XLSX.utils.sheet_to_json(prevSheet);
+
+                for (const row of prevData) {
+                    // Buscar estación por nombre o serie
+                    const estacion = ESTACIONES.find(e => 
+                        e.nombre === row['Estación'] || e.serie === row['Serie']
+                    );
+
+                    if (estacion && row['Fecha'] && row['Novedades']) {
+                        await addStationRecord('preventivos', {
+                            estacionId: estacion.id,
+                            fecha: row['Fecha'],
+                            novedades: row['Novedades'],
+                            createdAt: new Date().toISOString()
+                        });
+                        importedCount++;
+                    }
+                }
+            }
+
+            // Importar Correctivos
+            if (workbook.SheetNames.includes('Correctivos')) {
+                const corrSheet = workbook.Sheets['Correctivos'];
+                const corrData = XLSX.utils.sheet_to_json(corrSheet);
+
+                for (const row of corrData) {
+                    const estacion = ESTACIONES.find(e => 
+                        e.nombre === row['Estación'] || e.serie === row['Serie']
+                    );
+
+                    if (estacion && row['Fecha'] && row['Clase de Correctivo'] && row['Novedades']) {
+                        await addStationRecord('correctivos', {
+                            estacionId: estacion.id,
+                            fecha: row['Fecha'],
+                            clase: row['Clase de Correctivo'],
+                            novedades: row['Novedades'],
+                            createdAt: new Date().toISOString()
+                        });
+                        importedCount++;
+                    }
+                }
+            }
+
+            // Importar Suministros
+            if (workbook.SheetNames.includes('Suministros')) {
+                const sumSheet = workbook.Sheets['Suministros'];
+                const sumData = XLSX.utils.sheet_to_json(sumSheet);
+
+                for (const row of sumData) {
+                    const estacion = ESTACIONES.find(e => 
+                        e.nombre === row['Estación'] || e.serie === row['Serie']
+                    );
+
+                    if (estacion && row['Fecha'] && row['Accesorio/Insumo'] && row['Cantidad']) {
+                        await addStationRecord('suministros', {
+                            estacionId: estacion.id,
+                            fecha: row['Fecha'],
+                            accesorio: row['Accesorio/Insumo'],
+                            cantidad: parseInt(row['Cantidad']) || 1,
+                            observaciones: row['Observaciones'] || '',
+                            createdAt: new Date().toISOString()
+                        });
+                        importedCount++;
+                    }
+                }
+            }
+
+            // Importar Volúmenes
+            if (workbook.SheetNames.includes('Volumenes')) {
+                const volSheet = workbook.Sheets['Volumenes'];
+                const volData = XLSX.utils.sheet_to_json(volSheet);
+
+                for (const row of volData) {
+                    const estacion = ESTACIONES.find(e => 
+                        e.nombre === row['Estación'] || e.serie === row['Serie']
+                    );
+
+                    if (estacion && row['Mes'] && row['Volumen (Litros)']) {
+                        await addStationRecord('volumenes', {
+                            estacionId: estacion.id,
+                            mes: row['Mes'],
+                            litros: parseFloat(row['Volumen (Litros)']) || 0,
+                            observaciones: row['Observaciones'] || '',
+                            createdAt: new Date().toISOString()
+                        });
+                        importedCount++;
+                    }
+                }
+            }
+
+            showEstacionesFeedback(`✅ ${importedCount} registros importados correctamente`, 'success');
+            
+            // Actualizar vista si está abierta
+            if (!estacionesSection.classList.contains('hidden')) {
+                await renderStations();
+                if (currentStationId) {
+                    await loadCurrentTabData();
+                }
+            }
+
+        } catch (error) {
+            console.error('Error importando:', error);
+            showEstacionesFeedback('Error al importar el archivo', 'error');
+        }
+
+        // Limpiar input
+        importEstacionesInput.value = '';
+    });
+
+    // === VARIABLES GLOBALES ===
+    let currentStationId = null;
+
+    // === ELEMENTOS DEL DOM ===
+    const stationsGrid = document.getElementById('stationsGrid');
+    const managementPanel = document.getElementById('managementPanel');
+    const currentStationTitle = document.getElementById('currentStationTitle');
+
+    // Modales
+    const preventivoModal = document.getElementById('preventivoModal');
+    const correctivoModal = document.getElementById('correctivoModal');
+    const suministroModal = document.getElementById('suministroModal');
+    const volumenModal = document.getElementById('volumenModal');
+
+    // Botones
+    const addPreventivoBtn = document.getElementById('addPreventivoBtn');
+    const addCorrectivoBtn = document.getElementById('addCorrectivoBtn');
+    const addSuministroBtn = document.getElementById('addSuministroBtn');
+    const addVolumenBtn = document.getElementById('addVolumenBtn');
+
+    // Listas
+    const preventivosList = document.getElementById('preventivosList');
+    const correctivosList = document.getElementById('correctivosList');
+    const suministrosList = document.getElementById('suministrosList');
+    const volumenesList = document.getElementById('volumenesList');
+
+    // === INICIALIZAR TABS ===
+    function initializeTabs() {
+        const stationTabs = document.querySelectorAll('.station-tab');
+        const stationTabContents = document.querySelectorAll('.station-tab-content');
+
+        stationTabs.forEach(tab => {
+            // Remover listeners anteriores clonando el elemento
+            const newTab = tab.cloneNode(true);
+            tab.parentNode.replaceChild(newTab, tab);
+        });
+
+        // Agregar nuevos listeners
+        document.querySelectorAll('.station-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.station-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.station-tab-content').forEach(tc => tc.classList.remove('active'));
+
+                tab.classList.add('active');
+                const tabName = tab.dataset.tab;
+                const content = document.getElementById(`${tabName}-content`);
+                if (content) {
+                    content.classList.add('active');
+                }
+
+                loadCurrentTabData();
+            });
+        });
+    }
+
+    // === RENDERIZAR ESTACIONES ===
+    async function renderStations() {
+        stationsGrid.innerHTML = '';
+
+        for (const estacion of ESTACIONES) {
+            const preventivos = await getStationRecordsByStation('preventivos', estacion.id);
+            const correctivos = await getStationRecordsByStation('correctivos', estacion.id);
+            const suministros = await getStationRecordsByStation('suministros', estacion.id);
+            const volumenes = await getStationRecordsByStation('volumenes', estacion.id);
+
+            const card = document.createElement('div');
+            card.className = 'station-card';
+            if (currentStationId === estacion.id) {
+                card.classList.add('active');
+            }
+
+            card.innerHTML = `
+                <div class="station-header">
+                    <div class="station-name">${estacion.nombre}</div>
+                    <div class="station-provider">${estacion.proveedor}</div>
+                </div>
+                <div class="station-serie">Serie: ${estacion.serie}</div>
+                <div class="station-stats">
+                    <div class="stat-item">
+                        <div class="stat-value">${preventivos.length}</div>
+                        <div class="stat-label">Preventivos</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${correctivos.length}</div>
+                        <div class="stat-label">Correctivos</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${suministros.length}</div>
+                        <div class="stat-label">Suministros</div>
+                    </div>
+                </div>
+                <div style="margin-top: 12px; padding: 8px; background: rgba(79, 172, 254, 0.1); border-radius: 8px; text-align: center;">
+                    <div style="font-size: 0.7rem; color: #888;">Registros de Volumen</div>
+                    <div style="font-size: 1rem; font-weight: 600; color: #4facfe;">${volumenes.length}</div>
+                </div>
+            `;
+
+            card.addEventListener('click', () => selectStation(estacion.id));
+            stationsGrid.appendChild(card);
+        }
+    }
+
+    // === SELECCIONAR ESTACIÓN ===
+    async function selectStation(estacionId) {
+        currentStationId = estacionId;
+        const estacion = ESTACIONES.find(e => e.id === estacionId);
+
+        currentStationTitle.innerHTML = `
+            💧 ${estacion.nombre} 
+            <span style="font-size: 0.9rem; color: #888; font-weight: 400;">
+                (${estacion.serie} - ${estacion.proveedor})
+            </span>
+        `;
+
+        managementPanel.classList.remove('hidden');
+        
+        // Inicializar tabs cada vez que se abre el panel
+        initializeTabs();
+        
+        await renderStations();
+        await loadCurrentTabData();
+
+        managementPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // === TABS ===
+    async function loadCurrentTabData() {
+        if (!currentStationId) return;
+
+        const activeTab = document.querySelector('.station-tab.active').dataset.tab;
+
+        if (activeTab === 'preventivos') {
+            await loadPreventivos();
+        } else if (activeTab === 'correctivos') {
+            await loadCorrectivos();
+        } else if (activeTab === 'suministros') {
+            await loadSuministros();
+        } else if (activeTab === 'volumenes') {
+            await loadVolumenes();
+        }
+    }
+
+    // === PREVENTIVOS ===
+    async function loadPreventivos() {
+        const preventivos = await getStationRecordsByStation('preventivos', currentStationId);
+        preventivosList.innerHTML = '';
+
+        if (preventivos.length === 0) {
+            preventivosList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📅</div>
+                    <div>No hay preventivos registrados</div>
+                </div>
+            `;
+            return;
+        }
+
+        preventivos.forEach(prev => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            item.innerHTML = `
+                <div class="timeline-date">${formatStationDate(prev.fecha)}</div>
+                <div class="timeline-content">${prev.novedades}</div>
+                <div class="timeline-actions">
+                    <button class="btn btn-danger btn-small" onclick="window.deletePreventivo(${prev.id})">🗑️ Eliminar</button>
+                </div>
+            `;
+            preventivosList.appendChild(item);
+        });
+    }
+
+    addPreventivoBtn.addEventListener('click', () => {
+        document.getElementById('preventivoFecha').value = new Date().toISOString().split('T')[0];
+        document.getElementById('preventivoNovedades').value = '';
+        preventivoModal.classList.remove('hidden');
+    });
+
+    document.getElementById('savePreventivoBtn').addEventListener('click', async () => {
+        const fecha = document.getElementById('preventivoFecha').value;
+        const novedades = document.getElementById('preventivoNovedades').value.trim();
+
+        if (!fecha || !novedades) {
+            alert('Por favor completa todos los campos');
+            return;
+        }
+
+        await addStationRecord('preventivos', {
+            estacionId: currentStationId,
+            fecha: fecha,
+            novedades: novedades,
+            createdAt: new Date().toISOString()
+        });
+
+        preventivoModal.classList.add('hidden');
+        await loadPreventivos();
+        await renderStations();
+    });
+
+    document.getElementById('cancelPreventivoBtn').addEventListener('click', () => {
+        preventivoModal.classList.add('hidden');
+    });
+
+    window.deletePreventivo = async (id) => {
+        if (confirm('¿Eliminar este preventivo?')) {
+            await deleteStationRecord('preventivos', id);
+            await loadPreventivos();
+            await renderStations();
+        }
+    };
+
+    // === CORRECTIVOS ===
+    async function loadCorrectivos() {
+        const correctivos = await getStationRecordsByStation('correctivos', currentStationId);
+        correctivosList.innerHTML = '';
+
+        if (correctivos.length === 0) {
+            correctivosList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🔧</div>
+                    <div>No hay correctivos registrados</div>
+                </div>
+            `;
+            return;
+        }
+
+        correctivos.forEach(corr => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            item.innerHTML = `
+                <div class="timeline-date">${formatStationDate(corr.fecha)}</div>
+                <div style="color: #ffc800; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px;">
+                    ${corr.clase}
+                </div>
+                <div class="timeline-content">${corr.novedades}</div>
+                <div class="timeline-actions">
+                    <button class="btn btn-danger btn-small" onclick="window.deleteCorrectivo(${corr.id})">🗑️ Eliminar</button>
+                </div>
+            `;
+            correctivosList.appendChild(item);
+        });
+    }
+
+    addCorrectivoBtn.addEventListener('click', () => {
+        document.getElementById('correctivoFecha').value = new Date().toISOString().split('T')[0];
+        document.getElementById('correctivoClase').value = '';
+        document.getElementById('correctivoNovedades').value = '';
+        correctivoModal.classList.remove('hidden');
+    });
+
+    document.getElementById('saveCorrectivoBtn').addEventListener('click', async () => {
+        const fecha = document.getElementById('correctivoFecha').value;
+        const clase = document.getElementById('correctivoClase').value;
+        const novedades = document.getElementById('correctivoNovedades').value.trim();
+
+        if (!fecha || !clase || !novedades) {
+            alert('Por favor completa todos los campos');
+            return;
+        }
+
+        await addStationRecord('correctivos', {
+            estacionId: currentStationId,
+            fecha: fecha,
+            clase: clase,
+            novedades: novedades,
+            createdAt: new Date().toISOString()
+        });
+
+        correctivoModal.classList.add('hidden');
+        await loadCorrectivos();
+        await renderStations();
+    });
+
+    document.getElementById('cancelCorrectivoBtn').addEventListener('click', () => {
+        correctivoModal.classList.add('hidden');
+    });
+
+    window.deleteCorrectivo = async (id) => {
+        if (confirm('¿Eliminar este correctivo?')) {
+            await deleteStationRecord('correctivos', id);
+            await loadCorrectivos();
+            await renderStations();
+        }
+    };
+
+    // === SUMINISTROS ===
+    async function loadSuministros() {
+        const suministros = await getStationRecordsByStation('suministros', currentStationId);
+        suministrosList.innerHTML = '';
+
+        if (suministros.length === 0) {
+            suministrosList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📦</div>
+                    <div>No hay suministros registrados</div>
+                </div>
+            `;
+            return;
+        }
+
+        suministros.forEach(sum => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            item.innerHTML = `
+                <div class="timeline-date">${formatStationDate(sum.fecha)}</div>
+                <div style="color: #43e97b; font-weight: 600; font-size: 0.95rem; margin-bottom: 6px;">
+                    ${sum.accesorio} (x${sum.cantidad})
+                </div>
+                <div class="timeline-content">${sum.observaciones || 'Sin observaciones'}</div>
+                <div class="timeline-actions">
+                    <button class="btn btn-danger btn-small" onclick="window.deleteSuministro(${sum.id})">🗑️ Eliminar</button>
+                </div>
+            `;
+            suministrosList.appendChild(item);
+        });
+    }
+
+    addSuministroBtn.addEventListener('click', () => {
+        document.getElementById('suministroFecha').value = new Date().toISOString().split('T')[0];
+        document.getElementById('suministroAccesorio').value = '';
+        document.getElementById('suministroCantidad').value = '1';
+        document.getElementById('suministroObservaciones').value = '';
+        suministroModal.classList.remove('hidden');
+    });
+
+    document.getElementById('saveSuministroBtn').addEventListener('click', async () => {
+        const fecha = document.getElementById('suministroFecha').value;
+        const accesorioSelect = document.getElementById('suministroAccesorio');
+        const accesorio = accesorioSelect.value;
+        const cantidad = parseInt(document.getElementById('suministroCantidad').value);
+        const observaciones = document.getElementById('suministroObservaciones').value.trim();
+
+        if (!fecha || !accesorio || !cantidad) {
+            alert('Por favor completa los campos requeridos');
+            return;
+        }
+
+        await addStationRecord('suministros', {
+            estacionId: currentStationId,
+            fecha: fecha,
+            accesorio: accesorio,
+            cantidad: cantidad,
+            observaciones: observaciones,
+            createdAt: new Date().toISOString()
+        });
+
+        suministroModal.classList.add('hidden');
+        await loadSuministros();
+        await renderStations();
+    });
+
+    document.getElementById('cancelSuministroBtn').addEventListener('click', () => {
+        suministroModal.classList.add('hidden');
+    });
+
+    window.deleteSuministro = async (id) => {
+        if (confirm('¿Eliminar este suministro?')) {
+            await deleteStationRecord('suministros', id);
+            await loadSuministros();
+            await renderStations();
+        }
+    };
+
+    // === VOLÚMENES ===
+    async function loadVolumenes() {
+        const volumenes = await getStationRecordsByStation('volumenes', currentStationId);
+        volumenesList.innerHTML = '';
+
+        if (volumenes.length === 0) {
+            volumenesList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">💧</div>
+                    <div>No hay volúmenes registrados</div>
+                </div>
+            `;
+            return;
+        }
+
+        volumenes.forEach(vol => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            const mesFormateado = formatMonthYear(vol.mes);
+            const litrosFormateados = parseFloat(vol.litros).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            item.innerHTML = `
+                <div class="timeline-date">${mesFormateado}</div>
+                <div style="color: #4facfe; font-weight: 600; font-size: 1.1rem; margin-bottom: 6px;">
+                    ${litrosFormateados} Litros
+                </div>
+                <div class="timeline-content">${vol.observaciones || 'Sin observaciones'}</div>
+                <div class="timeline-actions">
+                    <button class="btn btn-danger btn-small" onclick="window.deleteVolumen(${vol.id})">🗑️ Eliminar</button>
+                </div>
+            `;
+            volumenesList.appendChild(item);
+        });
+    }
+
+    addVolumenBtn.addEventListener('click', () => {
+        // Establecer mes actual por defecto
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        document.getElementById('volumenMes').value = currentMonth;
+        document.getElementById('volumenLitros').value = '';
+        document.getElementById('volumenObservaciones').value = '';
+        volumenModal.classList.remove('hidden');
+    });
+
+    document.getElementById('saveVolumenBtn').addEventListener('click', async () => {
+        const mes = document.getElementById('volumenMes').value;
+        const litros = document.getElementById('volumenLitros').value;
+        const observaciones = document.getElementById('volumenObservaciones').value.trim();
+
+        if (!mes || !litros) {
+            alert('Por favor completa los campos requeridos');
+            return;
+        }
+
+        const litrosNum = parseFloat(litros);
+        if (isNaN(litrosNum) || litrosNum < 0) {
+            alert('Por favor ingresa un volumen válido');
+            return;
+        }
+
+        await addStationRecord('volumenes', {
+            estacionId: currentStationId,
+            mes: mes,
+            litros: litrosNum,
+            observaciones: observaciones,
+            createdAt: new Date().toISOString()
+        });
+
+        volumenModal.classList.add('hidden');
+        await loadVolumenes();
+        await renderStations();
+    });
+
+    document.getElementById('cancelVolumenBtn').addEventListener('click', () => {
+        volumenModal.classList.add('hidden');
+    });
+
+    window.deleteVolumen = async (id) => {
+        if (confirm('¿Eliminar este registro de volumen?')) {
+            await deleteStationRecord('volumenes', id);
+            await loadVolumenes();
+            await renderStations();
+        }
+    };
+
+    // === UTILIDADES ===
+    function formatStationDate(dateStr) {
+        const date = new Date(dateStr + 'T00:00:00');
+        return date.toLocaleDateString('es-ES', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+
+    function formatMonthYear(monthStr) {
+        const [year, month] = monthStr.split('-');
+        const date = new Date(year, parseInt(month) - 1, 1);
+        return date.toLocaleDateString('es-ES', {
+            year: 'numeric',
+            month: 'long'
+        });
+    }
+
+    // === INICIALIZACIÓN ===
+    initStationsDB().then(() => {
+        console.log('Base de datos de estaciones inicializada');
+        renderStations();
+    }).catch(err => {
+        console.error('Error inicializando DB de estaciones:', err);
+    });
+})();
