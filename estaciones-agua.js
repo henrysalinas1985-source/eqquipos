@@ -24,6 +24,18 @@ document.addEventListener('DOMContentLoaded', () => {
             nombre: 'Estación D',
             serie: 'EST-AGU-MP00005085',
             proveedor: 'Roche'
+        },
+        {
+            id: 'PRE01',
+            nombre: 'PRE 01',
+            serie: 'N/A',
+            proveedor: 'N/A'
+        },
+        {
+            id: 'PRE02',
+            nombre: 'PRE 02',
+            serie: 'N/A',
+            proveedor: 'N/A'
         }
     ];
 
