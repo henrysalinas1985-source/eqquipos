@@ -508,20 +508,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Procesar cada hoja
                 globalSheetNames.forEach(sheetName => {
                     const worksheet = globalWorkbook.Sheets[sheetName];
-                    let sheetData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                    let rawSheetData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
-                    // Limpiar datos: eliminar filas donde todos los valores sean vacíos o nulos
-                    sheetData = sheetData.filter(row => {
-                        return Object.values(row).some(val => val !== "" && val !== null && val !== undefined);
-                    });
+                    if (rawSheetData.length > 0) {
+                        // 1. Identificar headers válidos (que no sean __EMPTY)
+                        const allKeys = Object.keys(rawSheetData[0]);
+                        const validHeaders = allKeys.filter(h => !h.startsWith('__EMPTY'));
+                        globalAllSheetsHeaders[sheetName] = validHeaders;
 
-                    globalAllSheetsData[sheetName] = sheetData;
+                        // 2. Limpiar datos: eliminar filas donde todos los valores en las columnas válidas sean vacíos
+                        const cleanedData = rawSheetData.filter(row => {
+                            return validHeaders.some(h => {
+                                const val = row[h];
+                                return val !== "" && val !== null && val !== undefined;
+                            });
+                        });
 
-                    if (sheetData.length > 0) {
-                        // Filtrar headers que empiezan con __EMPTY (columnas sin nombre en Excel)
-                        globalAllSheetsHeaders[sheetName] = Object.keys(sheetData[0]).filter(h => !h.startsWith('__EMPTY'));
+                        globalAllSheetsData[sheetName] = cleanedData;
                     } else {
                         globalAllSheetsHeaders[sheetName] = [];
+                        globalAllSheetsData[sheetName] = [];
                     }
                 });
 
