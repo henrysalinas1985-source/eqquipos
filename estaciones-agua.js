@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // === INDEXEDDB ===
     let db = null;
     const DB_NAME = 'EstacionesAguaDB';
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
 
     function initDB() {
         return new Promise((resolve, reject) => {
@@ -76,6 +76,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const sumStore = database.createObjectStore('suministros', { keyPath: 'id', autoIncrement: true });
                     sumStore.createIndex('estacionId', 'estacionId', { unique: false });
                     sumStore.createIndex('fecha', 'fecha', { unique: false });
+                }
+
+                // Store para certificados
+                if (!database.objectStoreNames.contains('certificados')) {
+                    const certStore = database.createObjectStore('certificados', { keyPath: 'id', autoIncrement: true });
+                    certStore.createIndex('estacionId', 'estacionId', { unique: false });
+                    certStore.createIndex('fecha', 'fecha', { unique: false });
                 }
             };
         });
@@ -145,6 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === VARIABLES GLOBALES ===
     let currentStationId = null;
+    let cameraStream = null;
+    let capturedPhoto = null;
 
     // === ELEMENTOS DEL DOM ===
     const stationsGrid = document.getElementById('stationsGrid');
@@ -169,6 +178,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const preventivosList = document.getElementById('preventivosList');
     const correctivosList = document.getElementById('correctivosList');
     const suministrosList = document.getElementById('suministrosList');
+    const certificadosList = document.getElementById('certificadosList');
+
+    // Elementos de Certificados (Cámara)
+    const certificadoModal = document.getElementById('certificadoModal');
+    const addCertBtn = document.getElementById('addCertBtn');
+    const certVideo = document.getElementById('certVideo');
+    const certCapturedImg = document.getElementById('certCapturedImg');
+    const startCertCameraBtn = document.getElementById('startCertCameraBtn');
+    const captureCertBtn = document.getElementById('captureCertBtn');
+    const retakeCertBtn = document.getElementById('retakeCertBtn');
+    const saveCertBtn = document.getElementById('saveCertBtn');
+    const cancelCertBtn = document.getElementById('cancelCertBtn');
+    const certCameraContainer = document.getElementById('certCameraContainer');
+
+    // Visor de Imagen
+    const imageViewerModal = document.getElementById('imageViewerModal');
+    const fullSizeImage = document.getElementById('fullSizeImage');
+    const closeImageViewer = document.getElementById('closeImageViewer');
 
     // === RENDERIZAR ESTACIONES ===
     async function renderStations() {
@@ -178,6 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const preventivos = await getRecordsByStation('preventivos', estacion.id);
             const correctivos = await getRecordsByStation('correctivos', estacion.id);
             const suministros = await getRecordsByStation('suministros', estacion.id);
+            const certificados = await getRecordsByStation('certificados', estacion.id);
 
             const card = document.createElement('div');
             card.className = 'station-card';
@@ -203,6 +231,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="stat-item">
                         <div class="stat-value">${suministros.length}</div>
                         <div class="stat-label">Suministros</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${certificados.length}</div>
+                        <div class="stat-label">Certificados</div>
                     </div>
                 </div>
             `;
@@ -257,6 +289,8 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadCorrectivos();
         } else if (activeTab === 'suministros') {
             await loadSuministros();
+        } else if (activeTab === 'certificados') {
+            await loadCertificados();
         }
     }
 
@@ -479,6 +513,156 @@ document.addEventListener('DOMContentLoaded', () => {
             await renderStations();
         }
     };
+
+    // === CERTIFICADOS (CÁMARA) ===
+    async function loadCertificados() {
+        const certificados = await getRecordsByStation('certificados', currentStationId);
+        certificadosList.innerHTML = '';
+
+        if (certificados.length === 0) {
+            certificadosList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📜</div>
+                    <div>No hay certificados registrados</div>
+                </div>
+            `;
+            return;
+        }
+
+        certificados.forEach(cert => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            item.innerHTML = `
+                <div class="timeline-date">${formatDate(cert.fecha)}</div>
+                <div style="margin-bottom: 10px;">
+                    <img src="${cert.photo}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);" onclick="showImage('${cert.photo}')">
+                </div>
+                <div class="timeline-actions">
+                    <button class="btn btn-secondary btn-small" onclick="showImage('${cert.photo}')">📄 Ver</button>
+                    <button class="btn btn-danger btn-small" onclick="deleteCertificado(${cert.id})">🗑️ Eliminar</button>
+                </div>
+            `;
+            certificadosList.appendChild(item);
+        });
+    }
+
+    addCertBtn.addEventListener('click', () => {
+        document.getElementById('certFecha').value = new Date().toISOString().split('T')[0];
+        resetCertModal();
+        certificadoModal.classList.remove('hidden');
+    });
+
+    function resetCertModal() {
+        stopCamera();
+        capturedPhoto = null;
+        certCapturedImg.src = '';
+        certCapturedImg.classList.add('hidden');
+        certCameraContainer.classList.add('hidden');
+        startCertCameraBtn.classList.remove('hidden');
+        captureCertBtn.classList.add('hidden');
+        retakeCertBtn.classList.add('hidden');
+    }
+
+    async function startCamera() {
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            });
+            certVideo.srcObject = cameraStream;
+            certCameraContainer.classList.remove('hidden');
+            startCertCameraBtn.classList.add('hidden');
+            captureCertBtn.classList.remove('hidden');
+        } catch (err) {
+            console.error('Error al acceder a la cámara:', err);
+            alert('No se pudo acceder a la cámara. Revisa los permisos.');
+        }
+    }
+
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+    }
+
+    function capturePhoto() {
+        const canvas = document.createElement('canvas');
+        canvas.width = certVideo.videoWidth;
+        canvas.height = certVideo.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(certVideo, 0, 0);
+        
+        // Comprimir imagen (JPEG, calidad 0.6 para no saturar DB)
+        capturedPhoto = canvas.toDataURL('image/jpeg', 0.6);
+        
+        certCapturedImg.src = capturedPhoto;
+        certCapturedImg.classList.remove('hidden');
+        certCameraContainer.classList.add('hidden');
+        
+        captureCertBtn.classList.add('hidden');
+        retakeCertBtn.classList.remove('hidden');
+        
+        stopCamera();
+    }
+
+    startCertCameraBtn.addEventListener('click', startCamera);
+    captureCertBtn.addEventListener('click', capturePhoto);
+    retakeCertBtn.addEventListener('click', () => {
+        resetCertModal();
+        startCamera();
+    });
+
+    saveCertBtn.addEventListener('click', async () => {
+        const fecha = document.getElementById('certFecha').value;
+        
+        if (!fecha || !capturedPhoto) {
+            alert('Por favor selecciona una fecha y toma una foto');
+            return;
+        }
+
+        await addRecord('certificados', {
+            estacionId: currentStationId,
+            fecha: fecha,
+            photo: capturedPhoto,
+            createdAt: new Date().toISOString()
+        });
+
+        certificadoModal.classList.add('hidden');
+        resetCertModal();
+        await loadCertificados();
+        await renderStations();
+    });
+
+    cancelCertBtn.addEventListener('click', () => {
+        stopCamera();
+        certificadoModal.classList.add('hidden');
+    });
+
+    window.deleteCertificado = async (id) => {
+        if (confirm('¿Eliminar este certificado?')) {
+            await deleteRecord('certificados', id);
+            await loadCertificados();
+            await renderStations();
+        }
+    };
+
+    // === VISOR DE IMAGEN ===
+    window.showImage = (src) => {
+        fullSizeImage.src = src;
+        imageViewerModal.classList.remove('hidden');
+    };
+
+    closeImageViewer.addEventListener('click', () => {
+        imageViewerModal.classList.add('hidden');
+        fullSizeImage.src = '';
+    });
+
+    imageViewerModal.addEventListener('click', (e) => {
+        if (e.target === imageViewerModal) {
+            imageViewerModal.classList.add('hidden');
+            fullSizeImage.src = '';
+        }
+    });
 
     // === UTILIDADES ===
     function formatDate(dateStr) {

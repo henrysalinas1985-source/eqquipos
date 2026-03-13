@@ -474,6 +474,42 @@
         </div>
     </div>
 
+    <!-- Modal Certificado (Cámara) -->
+    <div id="certificadoModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h3>📸 Registrar Certificado Mensual</h3>
+            <div class="input-group">
+                <label>Fecha del Certificado</label>
+                <input type="date" id="certFecha">
+            </div>
+            
+            <div class="input-group">
+                <label>📷 Captura de Foto</label>
+                <div id="certCameraContainer" class="hidden" style="margin-bottom:10px;">
+                    <video id="certVideo" autoplay playsinline style="width:100%; max-height:250px; object-fit:cover; border-radius:12px; border:2px solid #4facfe;"></video>
+                </div>
+                <img id="certCapturedImg" class="hidden" style="width:100%; max-height:250px; object-fit:contain; border-radius:12px; border:2px solid #43e97b; margin-bottom:10px;">
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <button id="startCertCameraBtn" class="btn btn-secondary">📷 Abrir Cámara</button>
+                    <button id="captureCertBtn" class="btn btn-primary hidden">📸 Capturar</button>
+                    <button id="retakeCertBtn" class="btn btn-secondary hidden">🔄 Otra Foto</button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="saveCertBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
+                <button id="cancelCertBtn" class="btn btn-danger" style="flex: 1;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Visor de Imagen -->
+    <div id="imageViewerModal" class="modal-overlay hidden" style="background: rgba(0,0,0,0.95);">
+        <div id="closeImageViewer" style="position: absolute; top: 20px; right: 20px; font-size: 2.5rem; color: #fff; cursor: pointer; z-index: 1001; line-height: 1;">&times;</div>
+        <img id="fullSizeImage" src="" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; box-shadow: 0 0 50px rgba(79, 172, 254, 0.3);">
+    </div>
+
     <div class="container">
         <h1>💧 Gestión de Estaciones de Agua</h1>
         <p class="subtitle">Control de preventivos, correctivos y suministros</p>
@@ -492,6 +528,7 @@
                     <button class="tab active" data-tab="preventivos">📅 Preventivos</button>
                     <button class="tab" data-tab="correctivos">🔧 Correctivos</button>
                     <button class="tab" data-tab="suministros">📦 Suministros</button>
+                    <button class="tab" data-tab="certificados">📜 Certificados</button>
                 </div>
 
                 <!-- Tab Preventivos -->
@@ -510,6 +547,12 @@
                 <div class="tab-content" id="suministros-content">
                     <button id="addSuministroBtn" class="btn btn-primary">➕ Nuevo Suministro</button>
                     <div id="suministrosList" class="timeline"></div>
+                </div>
+
+                <!-- Tab Certificados -->
+                <div class="tab-content" id="certificados-content">
+                    <button id="addCertBtn" class="btn btn-primary">➕ Nuevo Certificado</button>
+                    <div id="certificadosList" class="timeline"></div>
                 </div>
             </div>
         </div>

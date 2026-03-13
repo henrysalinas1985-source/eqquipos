@@ -201,6 +201,172 @@
             font-size: 0.85rem;
         }
 
+        /* --- Estilos Estaciones de Agua --- */
+        #stationsGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .station-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+
+        .station-card:hover {
+            transform: translateY(-5px);
+            border-color: #4facfe;
+            box-shadow: 0 10px 30px rgba(79, 172, 254, 0.3);
+        }
+
+        .station-card.active {
+            border-color: #00f2fe;
+            background: rgba(79, 172, 254, 0.1);
+        }
+
+        .station-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .station-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #4facfe;
+        }
+
+        .station-provider {
+            font-size: 0.85rem;
+            color: #aaa;
+            padding: 4px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+        }
+
+        .station-serie {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .station-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #4facfe;
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        /* Tabs para Estaciones */
+        .station-tabs-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+
+        .station-tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #888;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+        }
+
+        .station-tab:hover {
+            color: #4facfe;
+        }
+
+        .station-tab.active {
+            color: #4facfe;
+            border-bottom-color: #4facfe;
+        }
+
+        .station-tab-content {
+            display: none;
+        }
+
+        .station-tab-content.active {
+            display: block;
+        }
+
+        /* Timeline simplificado para app.js */
+        .timeline-item {
+            position: relative;
+            margin-bottom: 20px;
+            padding: 16px 16px 16px 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            border-left: 3px solid #4facfe;
+        }
+
+        .timeline-date {
+            font-size: 0.85rem;
+            color: #4facfe;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .timeline-content {
+            color: #ccc;
+            font-size: 0.9rem;
+        }
+
+        .timeline-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
         .input-group input,
         .input-group select {
             width: 100%;
@@ -914,6 +1080,7 @@
                 <button class="station-tab active" data-tab="preventivos">📅 Preventivos</button>
                 <button class="station-tab" data-tab="correctivos">🔧 Correctivos</button>
                 <button class="station-tab" data-tab="suministros">📦 Suministros</button>
+                <button class="station-tab" data-tab="certificados">📜 Certificados</button>
                 <button class="station-tab" data-tab="volumenes">💧 Volumen</button>
             </div>
 
@@ -939,6 +1106,12 @@
             <div class="station-tab-content" id="volumenes-content">
                 <button id="addVolumenBtn" class="btn btn-primary">➕ Registrar Volumen Mensual</button>
                 <div id="volumenesList" style="position: relative; padding-left: 30px;"></div>
+            </div>
+
+            <!-- Tab Certificados -->
+            <div class="station-tab-content" id="certificados-content">
+                <button id="addCertBtn" class="btn btn-primary">➕ Nuevo Certificado</button>
+                <div id="certificadosList" style="position: relative; padding-left: 30px;"></div>
             </div>
         </div>
     </div>
@@ -1053,6 +1226,42 @@
                 <button id="cancelVolumenBtn" class="btn btn-secondary" style="flex: 1;">Cancelar</button>
             </div>
         </div>
+    </div>
+
+    <!-- Modal Certificado (Cámara) -->
+    <div id="certificadoModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h3>📸 Registrar Certificado Mensual</h3>
+            <div class="input-group">
+                <label>Fecha del Certificado</label>
+                <input type="date" id="certFecha">
+            </div>
+            
+            <div class="input-group">
+                <label>📷 Captura de Foto</label>
+                <div id="certCameraContainer" class="hidden" style="margin-bottom:10px;">
+                    <video id="certVideo" autoplay playsinline style="width:100%; max-height:250px; object-fit:cover; border-radius:12px; border:2px solid #4facfe;"></video>
+                </div>
+                <img id="certCapturedImg" class="hidden" style="width:100%; max-height:250px; object-fit:contain; border-radius:12px; border:2px solid #43e97b; margin-bottom:10px;">
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <button id="startCertCameraBtn" class="btn btn-secondary">📷 Abrir Cámara</button>
+                    <button id="captureCertBtn" class="btn btn-primary hidden">📸 Capturar</button>
+                    <button id="retakeCertBtn" class="btn btn-secondary hidden">🔄 Otra Foto</button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="saveCertBtn" class="btn btn-success" style="flex: 1;">Guardar</button>
+                <button id="cancelCertBtn" class="btn btn-danger" style="flex: 1;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Visor de Imagen (Compartido o Específico) -->
+    <div id="certImageViewerModal" class="modal-overlay hidden" style="background: rgba(0,0,0,0.95);">
+        <div id="closeCertImageViewer" style="position: absolute; top: 20px; right: 20px; font-size: 2.5rem; color: #fff; cursor: pointer; z-index: 1001; line-height: 1;">&times;</div>
+        <img id="fullSizeCertImage" src="" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; box-shadow: 0 0 50px rgba(79, 172, 254, 0.3);">
     </div>
     <!-- FIN SECCIÓN ESTACIONES DE AGUA -->
 

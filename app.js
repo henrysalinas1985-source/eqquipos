@@ -1745,7 +1745,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // === INDEXEDDB PARA ESTACIONES ===
     let stationsDB = null;
     const STATIONS_DB_NAME = 'EstacionesAguaDB';
-    const STATIONS_DB_VERSION = 2; // Incrementar versión para agregar store de volúmenes
+    const STATIONS_DB_VERSION = 3; // Incrementar versión para agregar store de certificados
 
     function initStationsDB() {
         return new Promise((resolve, reject) => {
@@ -1786,6 +1786,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const volStore = database.createObjectStore('volumenes', { keyPath: 'id', autoIncrement: true });
                     volStore.createIndex('estacionId', 'estacionId', { unique: false });
                     volStore.createIndex('mes', 'mes', { unique: false });
+                }
+
+                // Store para certificados
+                if (!database.objectStoreNames.contains('certificados')) {
+                    const certStore = database.createObjectStore('certificados', { keyPath: 'id', autoIncrement: true });
+                    certStore.createIndex('estacionId', 'estacionId', { unique: false });
+                    certStore.createIndex('fecha', 'fecha', { unique: false });
                 }
             };
         });
@@ -1835,6 +1842,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const tx = stationsDB.transaction(storeName, 'readwrite');
             const store = tx.objectStore(storeName);
             const request = store.clear();
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    function deleteStationRecord(storeName, id) {
+        return new Promise((resolve, reject) => {
+            const tx = stationsDB.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.delete(id);
 
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
@@ -2075,6 +2093,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === VARIABLES GLOBALES ===
     let currentStationId = null;
+    let certCameraStream = null;
+    let certCapturedPhoto = null;
 
     // === ELEMENTOS DEL DOM ===
     const stationsGrid = document.getElementById('stationsGrid');
@@ -2098,6 +2118,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const correctivosList = document.getElementById('correctivosList');
     const suministrosList = document.getElementById('suministrosList');
     const volumenesList = document.getElementById('volumenesList');
+    const certificadosList = document.getElementById('certificadosList');
+
+    // Elementos de Certificados (Cámara)
+    const certificadoModal = document.getElementById('certificadoModal');
+    const addCertBtn = document.getElementById('addCertBtn');
+    const certVideo = document.getElementById('certVideo');
+    const certCapturedImg = document.getElementById('certCapturedImg');
+    const startCertCameraBtn = document.getElementById('startCertCameraBtn');
+    const captureCertBtn = document.getElementById('captureCertBtn');
+    const retakeCertBtn = document.getElementById('retakeCertBtn');
+    const saveCertBtn = document.getElementById('saveCertBtn');
+    const cancelCertBtn = document.getElementById('cancelCertBtn');
+    const certCameraContainer = document.getElementById('certCameraContainer');
+
+    // Visor de Imagen Certificados
+    const certImageViewerModal = document.getElementById('certImageViewerModal');
+    const fullSizeCertImage = document.getElementById('fullSizeCertImage');
+    const closeCertImageViewer = document.getElementById('closeCertImageViewer');
 
     // === INICIALIZAR TABS ===
     function initializeTabs() {
@@ -2137,6 +2175,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const correctivos = await getStationRecordsByStation('correctivos', estacion.id);
             const suministros = await getStationRecordsByStation('suministros', estacion.id);
             const volumenes = await getStationRecordsByStation('volumenes', estacion.id);
+            const certificados = await getStationRecordsByStation('certificados', estacion.id);
 
             const card = document.createElement('div');
             card.className = 'station-card';
@@ -2164,9 +2203,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="stat-label">Suministros</div>
                     </div>
                 </div>
-                <div style="margin-top: 12px; padding: 8px; background: rgba(79, 172, 254, 0.1); border-radius: 8px; text-align: center;">
-                    <div style="font-size: 0.7rem; color: #888;">Registros de Volumen</div>
-                    <div style="font-size: 1rem; font-weight: 600; color: #4facfe;">${volumenes.length}</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; padding: 8px; background: rgba(79, 172, 254, 0.1); border-radius: 8px; text-align: center;">
+                    <div>
+                        <div style="font-size: 0.7rem; color: #888;">Volumen</div>
+                        <div style="font-size: 1rem; font-weight: 600; color: #4facfe;">${volumenes.length}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.7rem; color: #888;">Certificados</div>
+                        <div style="font-size: 1rem; font-weight: 600; color: #43e97b;">${certificados.length}</div>
+                    </div>
                 </div>
             `;
 
@@ -2212,6 +2257,8 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadSuministros();
         } else if (activeTab === 'volumenes') {
             await loadVolumenes();
+        } else if (activeTab === 'certificados') {
+            await loadCertificados();
         }
     }
 
@@ -2520,6 +2567,157 @@ document.addEventListener('DOMContentLoaded', () => {
             await renderStations();
         }
     };
+
+    // === CERTIFICADOS (CÁMARA) ===
+    async function loadCertificados() {
+        if (!currentStationId) return;
+        const certificados = await getStationRecordsByStation('certificados', currentStationId);
+        certificadosList.innerHTML = '';
+
+        if (certificados.length === 0) {
+            certificadosList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📜</div>
+                    <div>No hay certificados registrados</div>
+                </div>
+            `;
+            return;
+        }
+
+        certificados.forEach(cert => {
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            item.innerHTML = `
+                <div class="timeline-date">${formatStationDate(cert.fecha)}</div>
+                <div style="margin-bottom: 10px;">
+                    <img src="${cert.photo}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);" onclick="window.showCertImage('${cert.photo}')">
+                </div>
+                <div class="timeline-actions">
+                    <button class="btn btn-secondary btn-small" onclick="window.showCertImage('${cert.photo}')">📄 Ver</button>
+                    <button class="btn btn-danger btn-small" onclick="window.deleteCertificado(${cert.id})">🗑️ Eliminar</button>
+                </div>
+            `;
+            certificadosList.appendChild(item);
+        });
+    }
+
+    addCertBtn.addEventListener('click', () => {
+        document.getElementById('certFecha').value = new Date().toISOString().split('T')[0];
+        resetCertModal();
+        certificadoModal.classList.remove('hidden');
+    });
+
+    function resetCertModal() {
+        stopCertCamera();
+        certCapturedPhoto = null;
+        certCapturedImg.src = '';
+        certCapturedImg.classList.add('hidden');
+        certCameraContainer.classList.add('hidden');
+        startCertCameraBtn.classList.remove('hidden');
+        captureCertBtn.classList.add('hidden');
+        retakeCertBtn.classList.add('hidden');
+    }
+
+    async function startCertCamera() {
+        try {
+            certCameraStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            });
+            certVideo.srcObject = certCameraStream;
+            certCameraContainer.classList.remove('hidden');
+            startCertCameraBtn.classList.add('hidden');
+            captureCertBtn.classList.remove('hidden');
+        } catch (err) {
+            console.error('Error al acceder a la cámara:', err);
+            alert('No se pudo acceder a la cámara. Revisa los permisos.');
+        }
+    }
+
+    function stopCertCamera() {
+        if (certCameraStream) {
+            certCameraStream.getTracks().forEach(track => track.stop());
+            certCameraStream = null;
+        }
+    }
+
+    function captureCertPhoto() {
+        const canvas = document.createElement('canvas');
+        canvas.width = certVideo.videoWidth;
+        canvas.height = certVideo.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(certVideo, 0, 0);
+        
+        // Comprimir imagen
+        certCapturedPhoto = canvas.toDataURL('image/jpeg', 0.6);
+        
+        certCapturedImg.src = certCapturedPhoto;
+        certCapturedImg.classList.remove('hidden');
+        certCameraContainer.classList.add('hidden');
+        
+        captureCertBtn.classList.add('hidden');
+        retakeCertBtn.classList.remove('hidden');
+        
+        stopCertCamera();
+    }
+
+    startCertCameraBtn.addEventListener('click', startCertCamera);
+    captureCertBtn.addEventListener('click', captureCertPhoto);
+    retakeCertBtn.addEventListener('click', () => {
+        resetCertModal();
+        startCertCamera();
+    });
+
+    saveCertBtn.addEventListener('click', async () => {
+        const fecha = document.getElementById('certFecha').value;
+        
+        if (!fecha || !certCapturedPhoto) {
+            alert('Por favor selecciona una fecha y toma una foto');
+            return;
+        }
+
+        await addStationRecord('certificados', {
+            estacionId: currentStationId,
+            fecha: fecha,
+            photo: certCapturedPhoto,
+            createdAt: new Date().toISOString()
+        });
+
+        certificadoModal.classList.add('hidden');
+        resetCertModal();
+        await loadCertificados();
+        await renderStations();
+    });
+
+    cancelCertBtn.addEventListener('click', () => {
+        stopCertCamera();
+        certificadoModal.classList.add('hidden');
+    });
+
+    window.deleteCertificado = async (id) => {
+        if (confirm('¿Eliminar este certificado?')) {
+            await deleteStationRecord('certificados', id);
+            await loadCertificados();
+            await renderStations();
+        }
+    };
+
+    // === VISOR DE IMAGEN CERTIFICADOS ===
+    window.showCertImage = (src) => {
+        fullSizeCertImage.src = src;
+        certImageViewerModal.classList.remove('hidden');
+    };
+
+    closeCertImageViewer.addEventListener('click', () => {
+        certImageViewerModal.classList.add('hidden');
+        fullSizeCertImage.src = '';
+    });
+
+    certImageViewerModal.addEventListener('click', (e) => {
+        if (e.target === certImageViewerModal) {
+            certImageViewerModal.classList.add('hidden');
+            fullSizeCertImage.src = '';
+        }
+    });
 
     // === UTILIDADES ===
     function formatStationDate(dateStr) {
